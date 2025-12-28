@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
     format::RowBinaryFormat,
-    schema::{Schema, ensure_nested_names, expand_schema_for_writing},
+    schema::{Row, Schema, ensure_nested_names, expand_schema_for_writing},
     value_rw::{write_nested_value, write_value},
 };
 
@@ -87,6 +87,16 @@ impl<W: Write> RowBinaryWriter<W> {
         Ok(())
     }
 
+    /// Writes a single owned row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error`] when the row is invalid or IO fails.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn write_row_owned(&mut self, row: Row) -> Result<()> {
+        self.write_row(&row)
+    }
+
     /// Writes multiple rows.
     ///
     /// # Errors
@@ -115,5 +125,20 @@ impl<W: Write> RowBinaryWriter<W> {
     /// Returns the inner writer.
     pub fn into_inner(self) -> W {
         self.inner
+    }
+
+    /// Replaces the inner writer and resets header state.
+    pub fn reset(&mut self, inner: W) {
+        self.inner = inner;
+        self.header_written = false;
+    }
+
+    /// Takes the inner writer, replacing it with `Default::default()`.
+    pub fn take_inner(&mut self) -> W
+    where
+        W: Default,
+    {
+        self.header_written = false;
+        std::mem::take(&mut self.inner)
     }
 }

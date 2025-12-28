@@ -10,7 +10,7 @@ payload when you hit the batch size.
 
 ```rust
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 
 use clickhouse_binary::{
     RowBinaryFormat, RowBinaryReader, RowBinaryWriter, Schema, Value,
@@ -24,6 +24,7 @@ let rows = vec![
     vec![Value::UInt8(2), Value::String(b"beta".to_vec())],
 ];
 let file = File::create("data.rowbinary.zst")?;
+let file = BufWriter::new(file);
 let mut encoder = Encoder::new(file, 0)?;
 let mut writer = RowBinaryWriter::new(
     Vec::new(),
@@ -36,6 +37,7 @@ encoder.finish()?;
 
 // 2) Read and post batches to ClickHouse (stream rows; no Vec<Row> buffering).
 let file = File::open("data.rowbinary.zst")?;
+let file = BufReader::new(file);
 let decoder = Decoder::new(file)?;
 let mut reader = RowBinaryReader::new(decoder, RowBinaryFormat::RowBinaryWithNamesAndTypes);
 reader.read_header()?;
@@ -45,18 +47,16 @@ let mut out = RowBinaryWriter::new(
     RowBinaryFormat::RowBinaryWithNamesAndTypes,
     schema.clone(),
 );
+let mut row_buf = Vec::new();
 let mut count = 0usize;
-while let Some(row) = reader.read_row()? {
-    out.write_row(&row)?;
+while reader.read_row_into(&mut row_buf)? {
+    out.write_row(&row_buf)?;
     count += 1;
     if count == 100_000 {
-        let payload = out.into_inner();
+        let mut payload = out.take_inner();
         // POST: INSERT INTO table FORMAT RowBinaryWithNamesAndTypes
-        out = RowBinaryWriter::new(
-            Vec::new(),
-            RowBinaryFormat::RowBinaryWithNamesAndTypes,
-            schema.clone(),
-        );
+        payload.clear();
+        out.reset(payload);
         count = 0;
     }
 }
@@ -69,13 +69,16 @@ if count > 0 {
 
 For tighter control over allocations, keep a reusable `Vec<u8>` per batch,
 `clear()` it after sending, and pass it into each new `RowBinaryWriter`.
+If your HTTP client supports streaming request bodies, you can write directly
+into the request stream instead of buffering the entire batch.
 
 ## Writing Nested columns
 
 ClickHouse expands `Nested` columns into separate `Array(T)` columns on write
 (`n.a`, `n.b`, ...). The writer handles this for you: supply a `Nested` schema
 and pass `Value::Array(Vec<Value::Tuple>)` for the column value. The writer
-will emit `n.a`, `n.b` payloads in the expected order.
+will emit `n.a`, `n.b` payloads in the expected order. This conversion buffers
+the nested values to transpose rows into per-field arrays.
 
 ```rust
 use clickhouse_binary::{RowBinaryFormat, RowBinaryWriter, Schema, Value};

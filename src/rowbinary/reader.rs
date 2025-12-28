@@ -164,4 +164,60 @@ impl<R: Read> RowBinaryReader<R> {
         }
         Ok(Some(row))
     }
+
+    /// Reads the next row into the provided buffer.
+    ///
+    /// Returns `Ok(true)` when a row was read, or `Ok(false)` on EOF.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error`] when decoding fails or the stream ends
+    /// unexpectedly.
+    pub fn read_row_into(&mut self, row: &mut Row) -> Result<bool> {
+        self.read_header()?;
+        let Some(schema) = &self.schema else {
+            return Err(Error::InvalidValue("schema required to read rows"));
+        };
+        if schema.is_empty() {
+            row.clear();
+            return Ok(false);
+        }
+
+        row.clear();
+        row.reserve(schema.len());
+        for (index, field) in schema.fields().iter().enumerate() {
+            let value = if index == 0 {
+                match read_value_optional(&field.ty, &mut self.inner)? {
+                    Some(value) => value,
+                    None => return Ok(false),
+                }
+            } else {
+                read_value_required(&field.ty, &mut self.inner)?
+            };
+            row.push(value);
+        }
+        Ok(true)
+    }
+
+    /// Returns an iterator over decoded rows.
+    pub fn rows(self) -> RowBinaryRows<R> {
+        RowBinaryRows { reader: self }
+    }
+}
+
+/// Iterator over `RowBinary` rows.
+pub struct RowBinaryRows<R: Read> {
+    reader: RowBinaryReader<R>,
+}
+
+impl<R: Read> Iterator for RowBinaryRows<R> {
+    type Item = Result<Row>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.reader.read_row() {
+            Ok(Some(row)) => Some(Ok(row)),
+            Ok(None) => None,
+            Err(err) => Some(Err(err)),
+        }
+    }
 }
