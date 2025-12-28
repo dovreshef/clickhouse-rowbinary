@@ -324,3 +324,136 @@ fn ipv6_low_cardinality_multi_row_writing() {
 
     server.exec(&format!("DROP TABLE {table}"));
 }
+
+#[test]
+fn ipv6_array_single_row_reading() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(IPv6)) ENGINE=Memory"
+    ));
+    server.exec(&format!(
+        "INSERT INTO {table} VALUES (['::1','2607:f8b0:4005:805::200e'])"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(IPv6)")]).unwrap();
+
+    for format in FORMATS {
+        let payload = server.fetch_rowbinary(&format!("SELECT value FROM {table}"), format);
+        let decoded = decode_rows(&payload, format, &schema);
+        assert_eq!(
+            decoded,
+            vec![vec![Value::Array(vec![
+                Value::Ipv6(Ipv6Addr::LOCALHOST),
+                Value::Ipv6(Ipv6Addr::new(
+                    0x2607, 0xf8b0, 0x4005, 0x0805, 0, 0, 0, 0x200e
+                )),
+            ])]]
+        );
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}
+
+#[test]
+fn ipv6_array_multi_row_reading() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(IPv6)) ENGINE=Memory"
+    ));
+    server.exec(&format!(
+        "INSERT INTO {table} VALUES (['::1','2607:f8b0:4005:805::200e']),([])"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(IPv6)")]).unwrap();
+
+    for format in FORMATS {
+        let payload = server.fetch_rowbinary(&format!("SELECT value FROM {table}"), format);
+        let decoded = decode_rows(&payload, format, &schema);
+        assert_eq!(
+            decoded,
+            vec![
+                vec![Value::Array(vec![
+                    Value::Ipv6(Ipv6Addr::LOCALHOST),
+                    Value::Ipv6(Ipv6Addr::new(
+                        0x2607, 0xf8b0, 0x4005, 0x0805, 0, 0, 0, 0x200e
+                    )),
+                ])],
+                vec![Value::Array(Vec::new())],
+            ]
+        );
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}
+
+#[test]
+fn ipv6_array_single_row_writing() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(IPv6)) ENGINE=Memory"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(IPv6)")]).unwrap();
+
+    for format in FORMATS {
+        let insert_sql = format!("INSERT INTO {table} FORMAT {format}");
+        server.insert_rowbinary(
+            &insert_sql,
+            format,
+            &schema,
+            &[vec![Value::Array(vec![
+                Value::Ipv6(Ipv6Addr::LOCALHOST),
+                Value::Ipv6(Ipv6Addr::new(
+                    0x2607, 0xf8b0, 0x4005, 0x0805, 0, 0, 0, 0x200e,
+                )),
+            ])]],
+        );
+        let json_rows = server.fetch_json(&format!("SELECT value FROM {table}"));
+        assert_eq!(
+            json_rows,
+            vec![json!({"value": ["::1", "2607:f8b0:4005:805::200e"]})]
+        );
+        server.exec(&format!("TRUNCATE TABLE {table}"));
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}
+
+#[test]
+fn ipv6_array_multi_row_writing() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(IPv6)) ENGINE=Memory"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(IPv6)")]).unwrap();
+
+    for format in FORMATS {
+        let insert_sql = format!("INSERT INTO {table} FORMAT {format}");
+        server.insert_rowbinary(
+            &insert_sql,
+            format,
+            &schema,
+            &[
+                vec![Value::Array(vec![
+                    Value::Ipv6(Ipv6Addr::LOCALHOST),
+                    Value::Ipv6(Ipv6Addr::new(
+                        0x2607, 0xf8b0, 0x4005, 0x0805, 0, 0, 0, 0x200e,
+                    )),
+                ])],
+                vec![Value::Array(Vec::new())],
+            ],
+        );
+        let json_rows = server.fetch_json(&format!("SELECT value FROM {table}"));
+        assert_eq!(
+            json_rows,
+            vec![
+                json!({"value": ["::1", "2607:f8b0:4005:805::200e"]}),
+                json!({"value": []})
+            ]
+        );
+        server.exec(&format!("TRUNCATE TABLE {table}"));
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}

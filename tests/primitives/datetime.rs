@@ -308,3 +308,122 @@ fn datetime_low_cardinality_multi_row_writing() {
 
     server.exec(&format!("DROP TABLE {table}"));
 }
+
+#[test]
+fn datetime_array_single_row_reading() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(DateTime)) ENGINE=Memory"
+    ));
+    server.exec(&format!(
+        "INSERT INTO {table} VALUES (['1970-01-01 00:00:01','1970-01-01 00:00:02'])"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(DateTime)")]).unwrap();
+
+    for format in FORMATS {
+        let payload = server.fetch_rowbinary(&format!("SELECT value FROM {table}"), format);
+        let decoded = decode_rows(&payload, format, &schema);
+        assert_eq!(
+            decoded,
+            vec![vec![Value::Array(vec![
+                Value::DateTime(1),
+                Value::DateTime(2)
+            ])]]
+        );
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}
+
+#[test]
+fn datetime_array_multi_row_reading() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(DateTime)) ENGINE=Memory"
+    ));
+    server.exec(&format!(
+        "INSERT INTO {table} VALUES (['1970-01-01 00:00:01','1970-01-01 00:00:02']),([])"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(DateTime)")]).unwrap();
+
+    for format in FORMATS {
+        let payload = server.fetch_rowbinary(&format!("SELECT value FROM {table}"), format);
+        let decoded = decode_rows(&payload, format, &schema);
+        assert_eq!(
+            decoded,
+            vec![
+                vec![Value::Array(vec![Value::DateTime(1), Value::DateTime(2)])],
+                vec![Value::Array(Vec::new())],
+            ]
+        );
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}
+
+#[test]
+fn datetime_array_single_row_writing() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(DateTime)) ENGINE=Memory"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(DateTime)")]).unwrap();
+
+    for format in FORMATS {
+        let insert_sql = format!("INSERT INTO {table} FORMAT {format}");
+        server.insert_rowbinary(
+            &insert_sql,
+            format,
+            &schema,
+            &[vec![Value::Array(vec![
+                Value::DateTime(1),
+                Value::DateTime(2),
+            ])]],
+        );
+        let json_rows = server.fetch_json(&format!("SELECT value FROM {table}"));
+        assert_eq!(
+            json_rows,
+            vec![json!({"value": ["1970-01-01 00:00:01", "1970-01-01 00:00:02"]})]
+        );
+        server.exec(&format!("TRUNCATE TABLE {table}"));
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}
+
+#[test]
+fn datetime_array_multi_row_writing() {
+    let server = ClickhouseServer::connect();
+    let table = unique_table("");
+    server.exec(&format!(
+        "CREATE TABLE {table} (value Array(DateTime)) ENGINE=Memory"
+    ));
+    let schema = Schema::from_type_strings(&[("value", "Array(DateTime)")]).unwrap();
+
+    for format in FORMATS {
+        let insert_sql = format!("INSERT INTO {table} FORMAT {format}");
+        server.insert_rowbinary(
+            &insert_sql,
+            format,
+            &schema,
+            &[
+                vec![Value::Array(vec![Value::DateTime(1), Value::DateTime(2)])],
+                vec![Value::Array(Vec::new())],
+            ],
+        );
+        let json_rows = server.fetch_json(&format!("SELECT value FROM {table}"));
+        assert_eq!(
+            json_rows,
+            vec![
+                json!({"value": ["1970-01-01 00:00:01", "1970-01-01 00:00:02"]}),
+                json!({"value": []})
+            ]
+        );
+        server.exec(&format!("TRUNCATE TABLE {table}"));
+    }
+
+    server.exec(&format!("DROP TABLE {table}"));
+}

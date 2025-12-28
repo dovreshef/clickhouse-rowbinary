@@ -1,2 +1,1 @@
-mod array;
 mod map;
