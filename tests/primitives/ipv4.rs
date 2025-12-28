@@ -15,6 +15,7 @@ const FORMATS: [RowBinaryFormat; 3] = [
 fn ipv4_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value IPv4) ENGINE=Memory"));
     server.exec(&format!("INSERT INTO {table} VALUES ('127.0.0.1')"));
     let schema = Schema::from_type_strings(&[("value", "IPv4")]).unwrap();
@@ -24,14 +25,13 @@ fn ipv4_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Ipv4(Ipv4Addr::LOCALHOST)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value IPv4) ENGINE=Memory"));
     server.exec(&format!(
         "INSERT INTO {table} VALUES ('127.0.0.1'),('10.0.0.1')"
@@ -49,14 +49,13 @@ fn ipv4_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value IPv4) ENGINE=Memory"));
     let schema = Schema::from_type_strings(&[("value", "IPv4")]).unwrap();
 
@@ -72,14 +71,13 @@ fn ipv4_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": "127.0.0.1"})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value IPv4) ENGINE=Memory"));
     let schema = Schema::from_type_strings(&[("value", "IPv4")]).unwrap();
 
@@ -101,14 +99,13 @@ fn ipv4_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_nullable_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(IPv4)) ENGINE=Memory"
     ));
@@ -120,14 +117,13 @@ fn ipv4_nullable_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Nullable(None)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_nullable_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(IPv4)) ENGINE=Memory"
     ));
@@ -147,14 +143,13 @@ fn ipv4_nullable_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_nullable_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(IPv4)) ENGINE=Memory"
     ));
@@ -167,14 +162,13 @@ fn ipv4_nullable_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": null})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_nullable_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(IPv4)) ENGINE=Memory"
     ));
@@ -200,14 +194,13 @@ fn ipv4_nullable_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_low_cardinality_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(IPv4)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -220,14 +213,13 @@ fn ipv4_low_cardinality_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Ipv4(Ipv4Addr::LOCALHOST)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_low_cardinality_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(IPv4)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -249,14 +241,13 @@ fn ipv4_low_cardinality_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_low_cardinality_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(IPv4)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -275,14 +266,13 @@ fn ipv4_low_cardinality_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": "127.0.0.1"})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_low_cardinality_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(IPv4)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -307,14 +297,13 @@ fn ipv4_low_cardinality_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_array_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(IPv4)) ENGINE=Memory"
     ));
@@ -334,14 +323,13 @@ fn ipv4_array_single_row_reading() {
             ])]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_array_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(IPv4)) ENGINE=Memory"
     ));
@@ -364,14 +352,13 @@ fn ipv4_array_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_array_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(IPv4)) ENGINE=Memory"
     ));
@@ -392,14 +379,13 @@ fn ipv4_array_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": ["127.0.0.1", "10.0.0.1"]})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn ipv4_array_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(IPv4)) ENGINE=Memory"
     ));
@@ -429,6 +415,4 @@ fn ipv4_array_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }

@@ -13,6 +13,7 @@ const FORMATS: [RowBinaryFormat; 3] = [
 fn fixed_string_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value FixedString(3)) ENGINE=Memory"
     ));
@@ -24,14 +25,13 @@ fn fixed_string_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::FixedString(b"abc".to_vec())]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value FixedString(3)) ENGINE=Memory"
     ));
@@ -49,14 +49,13 @@ fn fixed_string_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value FixedString(3)) ENGINE=Memory"
     ));
@@ -74,14 +73,13 @@ fn fixed_string_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": "abc"})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value FixedString(3)) ENGINE=Memory"
     ));
@@ -105,14 +103,13 @@ fn fixed_string_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_nullable_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(FixedString(3))) ENGINE=Memory"
     ));
@@ -124,14 +121,13 @@ fn fixed_string_nullable_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Nullable(None)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_nullable_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(FixedString(3))) ENGINE=Memory"
     ));
@@ -151,14 +147,13 @@ fn fixed_string_nullable_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_nullable_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(FixedString(3))) ENGINE=Memory"
     ));
@@ -171,14 +166,13 @@ fn fixed_string_nullable_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": null})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_nullable_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(FixedString(3))) ENGINE=Memory"
     ));
@@ -204,14 +198,13 @@ fn fixed_string_nullable_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_low_cardinality_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(FixedString(3))) ENGINE=Memory"
     ));
@@ -223,14 +216,13 @@ fn fixed_string_low_cardinality_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::FixedString(b"abc".to_vec())]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_low_cardinality_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(FixedString(3))) ENGINE=Memory"
     ));
@@ -251,14 +243,13 @@ fn fixed_string_low_cardinality_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_low_cardinality_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(FixedString(3))) ENGINE=Memory"
     ));
@@ -276,14 +267,13 @@ fn fixed_string_low_cardinality_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": "abc"})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_low_cardinality_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(FixedString(3))) ENGINE=Memory"
     ));
@@ -307,14 +297,13 @@ fn fixed_string_low_cardinality_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_array_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(FixedString(3))) ENGINE=Memory"
     ));
@@ -332,14 +321,13 @@ fn fixed_string_array_single_row_reading() {
             ])]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_array_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(FixedString(3))) ENGINE=Memory"
     ));
@@ -360,14 +348,13 @@ fn fixed_string_array_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_array_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(FixedString(3))) ENGINE=Memory"
     ));
@@ -388,14 +375,13 @@ fn fixed_string_array_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": ["abc", "xyz"]})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn fixed_string_array_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(FixedString(3))) ENGINE=Memory"
     ));
@@ -422,6 +408,4 @@ fn fixed_string_array_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }

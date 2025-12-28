@@ -21,6 +21,7 @@ fn uuid_values() -> (Uuid, Uuid) {
 fn uuid_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UUID) ENGINE=Memory"));
     server.exec(&format!(
         "INSERT INTO {table} VALUES ('e4eaaaf2-d142-11e1-b3e4-080027620cdd')"
@@ -33,14 +34,13 @@ fn uuid_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Uuid(first)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UUID) ENGINE=Memory"));
     server.exec(&format!(
         "INSERT INTO {table} VALUES ('e4eaaaf2-d142-11e1-b3e4-080027620cdd'),('f47ac10b-58cc-4372-a567-0e02b2c3d479')"
@@ -56,14 +56,13 @@ fn uuid_multi_row_reading() {
             vec![vec![Value::Uuid(first)], vec![Value::Uuid(second)]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UUID) ENGINE=Memory"));
     let schema = Schema::from_type_strings(&[("value", "UUID")]).unwrap();
     let (first, _) = uuid_values();
@@ -78,14 +77,13 @@ fn uuid_single_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UUID) ENGINE=Memory"));
     let schema = Schema::from_type_strings(&[("value", "UUID")]).unwrap();
     let (first, second) = uuid_values();
@@ -108,14 +106,13 @@ fn uuid_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_nullable_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UUID)) ENGINE=Memory"
     ));
@@ -127,14 +124,13 @@ fn uuid_nullable_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Nullable(None)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_nullable_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UUID)) ENGINE=Memory"
     ));
@@ -155,14 +151,13 @@ fn uuid_nullable_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_nullable_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UUID)) ENGINE=Memory"
     ));
@@ -175,14 +170,13 @@ fn uuid_nullable_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": null})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_nullable_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UUID)) ENGINE=Memory"
     ));
@@ -210,14 +204,13 @@ fn uuid_nullable_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_low_cardinality_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(UUID)) ENGINE=Memory"
     ));
@@ -232,14 +225,13 @@ fn uuid_low_cardinality_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Uuid(first)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_low_cardinality_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(UUID)) ENGINE=Memory"
     ));
@@ -261,14 +253,13 @@ fn uuid_low_cardinality_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_low_cardinality_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(UUID)) ENGINE=Memory"
     ));
@@ -285,14 +276,13 @@ fn uuid_low_cardinality_single_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_low_cardinality_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value LowCardinality(UUID)) ENGINE=Memory"
     ));
@@ -317,14 +307,13 @@ fn uuid_low_cardinality_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_array_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UUID)) ENGINE=Memory"
     ));
@@ -345,14 +334,13 @@ fn uuid_array_single_row_reading() {
             ])]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_array_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UUID)) ENGINE=Memory"
     ));
@@ -373,14 +361,13 @@ fn uuid_array_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_array_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UUID)) ENGINE=Memory"
     ));
@@ -407,14 +394,13 @@ fn uuid_array_single_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uuid_array_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UUID)) ENGINE=Memory"
     ));
@@ -442,6 +428,4 @@ fn uuid_array_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }

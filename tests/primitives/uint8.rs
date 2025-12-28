@@ -13,6 +13,7 @@ const FORMATS: [RowBinaryFormat; 3] = [
 fn uint8_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UInt8) ENGINE=Memory"));
     server.exec(&format!("INSERT INTO {table} VALUES (7)"));
     let schema = Schema::from_type_strings(&[("value", "UInt8")]).unwrap();
@@ -22,14 +23,13 @@ fn uint8_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::UInt8(7)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UInt8) ENGINE=Memory"));
     server.exec(&format!("INSERT INTO {table} VALUES (7),(9)"));
     let schema = Schema::from_type_strings(&[("value", "UInt8")]).unwrap();
@@ -39,14 +39,13 @@ fn uint8_multi_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::UInt8(7)], vec![Value::UInt8(9)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UInt8) ENGINE=Memory"));
     let schema = Schema::from_type_strings(&[("value", "UInt8")]).unwrap();
 
@@ -57,14 +56,13 @@ fn uint8_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!("CREATE TABLE {table} (value UInt8) ENGINE=Memory"));
     let schema = Schema::from_type_strings(&[("value", "UInt8")]).unwrap();
 
@@ -80,14 +78,13 @@ fn uint8_multi_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7}), json!({"value": 9})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_nullable_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt8)) ENGINE=Memory"
     ));
@@ -99,14 +96,13 @@ fn uint8_nullable_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Nullable(None)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_nullable_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt8)) ENGINE=Memory"
     ));
@@ -124,14 +120,13 @@ fn uint8_nullable_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_nullable_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt8)) ENGINE=Memory"
     ));
@@ -144,14 +139,13 @@ fn uint8_nullable_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": null})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_nullable_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt8)) ENGINE=Memory"
     ));
@@ -172,14 +166,13 @@ fn uint8_nullable_multi_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": null}), json!({"value": 7})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_low_cardinality_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt8)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -192,14 +185,13 @@ fn uint8_low_cardinality_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::UInt8(7)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_low_cardinality_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt8)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -219,14 +211,13 @@ fn uint8_low_cardinality_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_low_cardinality_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt8)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -240,14 +231,13 @@ fn uint8_low_cardinality_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_low_cardinality_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt8)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -266,14 +256,13 @@ fn uint8_low_cardinality_multi_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7}), json!({"value": 9})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_array_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt8)) ENGINE=Memory"
     ));
@@ -292,14 +281,13 @@ fn uint8_array_single_row_reading() {
             ])]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_array_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt8)) ENGINE=Memory"
     ));
@@ -321,14 +309,13 @@ fn uint8_array_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_array_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt8)) ENGINE=Memory"
     ));
@@ -350,14 +337,13 @@ fn uint8_array_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": [1, 2, 3]})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint8_array_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt8)) ENGINE=Memory"
     ));
@@ -385,6 +371,4 @@ fn uint8_array_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }

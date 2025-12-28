@@ -13,6 +13,7 @@ const FORMATS: [RowBinaryFormat; 3] = [
 fn uint32_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value UInt32) ENGINE=Memory"
     ));
@@ -24,14 +25,13 @@ fn uint32_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::UInt32(7)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value UInt32) ENGINE=Memory"
     ));
@@ -46,14 +46,13 @@ fn uint32_multi_row_reading() {
             vec![vec![Value::UInt32(7)], vec![Value::UInt32(9)]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value UInt32) ENGINE=Memory"
     ));
@@ -66,14 +65,13 @@ fn uint32_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value UInt32) ENGINE=Memory"
     ));
@@ -91,14 +89,13 @@ fn uint32_multi_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7}), json!({"value": 9})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_nullable_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt32)) ENGINE=Memory"
     ));
@@ -110,14 +107,13 @@ fn uint32_nullable_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::Nullable(None)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_nullable_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt32)) ENGINE=Memory"
     ));
@@ -135,14 +131,13 @@ fn uint32_nullable_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_nullable_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt32)) ENGINE=Memory"
     ));
@@ -155,14 +150,13 @@ fn uint32_nullable_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": null})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_nullable_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Nullable(UInt32)) ENGINE=Memory"
     ));
@@ -183,14 +177,13 @@ fn uint32_nullable_multi_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": null}), json!({"value": 7})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_low_cardinality_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt32)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -203,14 +196,13 @@ fn uint32_low_cardinality_single_row_reading() {
         let decoded = decode_rows(&payload, format, &schema);
         assert_eq!(decoded, vec![vec![Value::UInt32(7)]]);
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_low_cardinality_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt32)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -230,14 +222,13 @@ fn uint32_low_cardinality_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_low_cardinality_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt32)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -251,14 +242,13 @@ fn uint32_low_cardinality_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_low_cardinality_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec_with_settings(
         &format!("CREATE TABLE {table} (value LowCardinality(UInt32)) ENGINE=Memory"),
         "allow_suspicious_low_cardinality_types=1",
@@ -277,14 +267,13 @@ fn uint32_low_cardinality_multi_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": 7}), json!({"value": 9})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_array_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt32)) ENGINE=Memory"
     ));
@@ -299,14 +288,13 @@ fn uint32_array_single_row_reading() {
             vec![vec![Value::Array(vec![Value::UInt32(7), Value::UInt32(9)])]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_array_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt32)) ENGINE=Memory"
     ));
@@ -324,14 +312,13 @@ fn uint32_array_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_array_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt32)) ENGINE=Memory"
     ));
@@ -349,14 +336,13 @@ fn uint32_array_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": [7, 9]})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn uint32_array_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Array(UInt32)) ENGINE=Memory"
     ));
@@ -380,6 +366,4 @@ fn uint32_array_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }

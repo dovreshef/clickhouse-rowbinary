@@ -13,6 +13,7 @@ const FORMATS: [RowBinaryFormat; 3] = [
 fn map_string_uint8_single_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Map(String, UInt8)) ENGINE=Memory"
     ));
@@ -30,14 +31,13 @@ fn map_string_uint8_single_row_reading() {
             ])]]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn map_string_uint8_multi_row_reading() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Map(String, UInt8)) ENGINE=Memory"
     ));
@@ -58,14 +58,13 @@ fn map_string_uint8_multi_row_reading() {
             ]
         );
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn map_string_uint8_single_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Map(String, UInt8)) ENGINE=Memory"
     ));
@@ -86,14 +85,13 @@ fn map_string_uint8_single_row_writing() {
         assert_eq!(json_rows, vec![json!({"value": {"a": 1, "b": 2}})]);
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
 
 #[test]
 fn map_string_uint8_multi_row_writing() {
     let server = ClickhouseServer::connect();
     let table = unique_table("");
+    server.exec(&format!("DROP TABLE IF EXISTS {table}"));
     server.exec(&format!(
         "CREATE TABLE {table} (value Map(String, UInt8)) ENGINE=Memory"
     ));
@@ -120,6 +118,4 @@ fn map_string_uint8_multi_row_writing() {
         );
         server.exec(&format!("TRUNCATE TABLE {table}"));
     }
-
-    server.exec(&format!("DROP TABLE {table}"));
 }
