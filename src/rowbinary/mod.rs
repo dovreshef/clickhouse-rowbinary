@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     error::{Error, Result},
     io::{read_bytes, read_string, read_uvarint, write_bytes, write_string, write_uvarint},
-    types::{TypeDesc, parse_type_desc},
+    types::{DecimalSize, TypeDesc, parse_type_desc},
     value::Value,
 };
 
@@ -453,6 +453,34 @@ fn read_value_optional<R: Read + ?Sized>(ty: &TypeDesc, reader: &mut R) -> Resul
         TypeDesc::Ipv6 => {
             read_fixed::<_, _, 16>(reader, |bytes| Value::Ipv6(Ipv6Addr::from(bytes)))
         }
+        TypeDesc::Decimal32 { .. } => {
+            read_fixed::<_, _, 4>(reader, |bytes| Value::Decimal32(i32::from_le_bytes(bytes)))
+        }
+        TypeDesc::Decimal64 { .. } => {
+            read_fixed::<_, _, 8>(reader, |bytes| Value::Decimal64(i64::from_le_bytes(bytes)))
+        }
+        TypeDesc::Decimal128 { .. } => read_fixed::<_, _, 16>(reader, |bytes| {
+            Value::Decimal128(i128::from_le_bytes(bytes))
+        }),
+        TypeDesc::Decimal256 { .. } => read_fixed::<_, _, 32>(reader, Value::Decimal256),
+        TypeDesc::Decimal { size, .. } => match size {
+            DecimalSize::Bits32 => {
+                read_fixed::<_, _, 4>(reader, |bytes| Value::Decimal32(i32::from_le_bytes(bytes)))
+            }
+            DecimalSize::Bits64 => {
+                read_fixed::<_, _, 8>(reader, |bytes| Value::Decimal64(i64::from_le_bytes(bytes)))
+            }
+            DecimalSize::Bits128 => read_fixed::<_, _, 16>(reader, |bytes| {
+                Value::Decimal128(i128::from_le_bytes(bytes))
+            }),
+            DecimalSize::Bits256 => read_fixed::<_, _, 32>(reader, Value::Decimal256),
+        },
+        TypeDesc::Enum8(_) => {
+            read_fixed::<_, _, 1>(reader, |bytes| Value::Enum8(i8::from_le_bytes(bytes)))
+        }
+        TypeDesc::Enum16(_) => {
+            read_fixed::<_, _, 2>(reader, |bytes| Value::Enum16(i16::from_le_bytes(bytes)))
+        }
         TypeDesc::Nullable(inner) => {
             let Some(flag_value) = read_fixed::<_, _, 1>(reader, |bytes| Value::UInt8(bytes[0]))?
             else {
@@ -512,6 +540,7 @@ where
     Ok(Some(map(buf)))
 }
 
+#[allow(clippy::too_many_lines)]
 fn write_value<W: Write + ?Sized>(ty: &TypeDesc, value: &Value, writer: &mut W) -> Result<()> {
     match (ty, value) {
         (TypeDesc::UInt8, Value::UInt8(value)) => writer.write_all(&[*value])?,
@@ -522,7 +551,9 @@ fn write_value<W: Write + ?Sized>(ty: &TypeDesc, value: &Value, writer: &mut W) 
         (TypeDesc::UInt64, Value::UInt64(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::Int8, Value::Int8(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::Int16, Value::Int16(value)) => writer.write_all(&value.to_le_bytes())?,
-        (TypeDesc::Int32, Value::Int32(value)) | (TypeDesc::Date32, Value::Date32(value)) => {
+        (TypeDesc::Int32, Value::Int32(value))
+        | (TypeDesc::Date32, Value::Date32(value))
+        | (TypeDesc::Decimal32 { .. }, Value::Decimal32(value)) => {
             writer.write_all(&value.to_le_bytes())?;
         }
         (TypeDesc::Int64, Value::Int64(value)) => writer.write_all(&value.to_le_bytes())?,
@@ -538,7 +569,8 @@ fn write_value<W: Write + ?Sized>(ty: &TypeDesc, value: &Value, writer: &mut W) 
         (TypeDesc::DateTime { .. }, Value::DateTime(value)) => {
             writer.write_all(&value.to_le_bytes())?;
         }
-        (TypeDesc::DateTime64 { .. }, Value::DateTime64(value)) => {
+        (TypeDesc::DateTime64 { .. }, Value::DateTime64(value))
+        | (TypeDesc::Decimal64 { .. }, Value::Decimal64(value)) => {
             writer.write_all(&value.to_le_bytes())?;
         }
         (TypeDesc::Uuid, Value::Uuid(value)) => {
@@ -552,6 +584,38 @@ fn write_value<W: Write + ?Sized>(ty: &TypeDesc, value: &Value, writer: &mut W) 
         }
         (TypeDesc::Ipv6, Value::Ipv6(value)) => {
             writer.write_all(&value.octets())?;
+        }
+        (TypeDesc::Decimal128 { .. }, Value::Decimal128(value)) => {
+            writer.write_all(&value.to_le_bytes())?;
+        }
+        (TypeDesc::Decimal256 { .. }, Value::Decimal256(value)) => {
+            writer.write_all(value)?;
+        }
+        (TypeDesc::Decimal { size, .. }, value) => match (size, value) {
+            (DecimalSize::Bits32, Value::Decimal32(value)) => {
+                writer.write_all(&value.to_le_bytes())?;
+            }
+            (DecimalSize::Bits64, Value::Decimal64(value)) => {
+                writer.write_all(&value.to_le_bytes())?;
+            }
+            (DecimalSize::Bits128, Value::Decimal128(value)) => {
+                writer.write_all(&value.to_le_bytes())?;
+            }
+            (DecimalSize::Bits256, Value::Decimal256(value)) => {
+                writer.write_all(value)?;
+            }
+            _ => {
+                return Err(Error::TypeMismatch {
+                    expected: ty.type_name(),
+                    actual: value.type_name().to_string(),
+                });
+            }
+        },
+        (TypeDesc::Enum8(_), Value::Enum8(value)) => {
+            writer.write_all(&value.to_le_bytes())?;
+        }
+        (TypeDesc::Enum16(_), Value::Enum16(value)) => {
+            writer.write_all(&value.to_le_bytes())?;
         }
         (TypeDesc::Nullable(inner), Value::Nullable(value)) => {
             if let Some(inner_value) = value {

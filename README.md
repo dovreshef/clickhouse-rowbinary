@@ -36,6 +36,8 @@ and multi-threaded producers).
 
 Currently supported:
 - Integers, floats, `String`, `FixedString`.
+- `Decimal`, `Decimal32`, `Decimal64`, `Decimal128`, `Decimal256`.
+- `Enum8`, `Enum16`.
 - `Date`, `Date32`, `DateTime`, `DateTime64`.
 - `UUID`, `IPv4`, `IPv6`.
 - `Nullable(T)`, `Array(T)`, `Map(K, V)`, `LowCardinality(T)`.
@@ -53,6 +55,14 @@ Dynamic and JSON v3 RowBinary encodings are planned but not implemented yet.
 RowBinary encodes values independent of storage codecs. A `String CODEC(ZSTD)`
 column still uses the same RowBinary encoding; an integration test verifies
 roundtrip when the server supports the codec.
+
+## Decimal Notes
+
+- `RowBinaryWithNamesAndTypes` headers use canonical `Decimal(precision, scale)`
+  names, even if the schema was declared with `Decimal32/64/128/256`.
+- When validating inserts via `FORMAT JSONEachRow`, ClickHouse emits decimals
+  as JSON numbers (not strings) and may trim trailing zeroes (for example,
+  `-56.00` becomes `-56`).
 
 ## Running Tests
 

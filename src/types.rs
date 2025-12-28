@@ -56,6 +56,39 @@ pub enum TypeDesc {
     Ipv4,
     /// IPv6 address column.
     Ipv6,
+    /// Decimal type with explicit precision/scale.
+    Decimal {
+        /// Total precision (number of digits).
+        precision: u8,
+        /// Scale (digits after decimal point).
+        scale: u8,
+        /// Underlying storage size.
+        size: DecimalSize,
+    },
+    /// Decimal32 stored as 32-bit integer with scale.
+    Decimal32 {
+        /// Scale (digits after decimal point).
+        scale: u8,
+    },
+    /// Decimal64 stored as 64-bit integer with scale.
+    Decimal64 {
+        /// Scale (digits after decimal point).
+        scale: u8,
+    },
+    /// Decimal128 stored as 128-bit integer with scale.
+    Decimal128 {
+        /// Scale (digits after decimal point).
+        scale: u8,
+    },
+    /// Decimal256 stored as 256-bit integer with scale.
+    Decimal256 {
+        /// Scale (digits after decimal point).
+        scale: u8,
+    },
+    /// Enum8 with label/value pairs.
+    Enum8(Vec<(String, i8)>),
+    /// Enum16 with label/value pairs.
+    Enum16(Vec<(String, i16)>),
     /// Nullable wrapper around another type.
     Nullable(Box<TypeDesc>),
     /// Dictionary-encoded values stored as a low cardinality column.
@@ -69,6 +102,19 @@ pub enum TypeDesc {
         /// Map value type.
         value: Box<TypeDesc>,
     },
+}
+
+/// Backing storage size for Decimal types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecimalSize {
+    /// 32-bit signed integer.
+    Bits32,
+    /// 64-bit signed integer.
+    Bits64,
+    /// 128-bit signed integer.
+    Bits128,
+    /// 256-bit signed integer.
+    Bits256,
 }
 
 impl TypeDesc {
@@ -104,6 +150,15 @@ impl TypeDesc {
             TypeDesc::Uuid => "UUID".into(),
             TypeDesc::Ipv4 => "IPv4".into(),
             TypeDesc::Ipv6 => "IPv6".into(),
+            TypeDesc::Decimal {
+                precision, scale, ..
+            } => format!("Decimal({precision}, {scale})"),
+            TypeDesc::Decimal32 { scale } => format!("Decimal(9, {scale})"),
+            TypeDesc::Decimal64 { scale } => format!("Decimal(18, {scale})"),
+            TypeDesc::Decimal128 { scale } => format!("Decimal(38, {scale})"),
+            TypeDesc::Decimal256 { scale } => format!("Decimal(76, {scale})"),
+            TypeDesc::Enum8(values) => format_enum("Enum8", values),
+            TypeDesc::Enum16(values) => format_enum("Enum16", values),
             TypeDesc::Nullable(inner) => format!("Nullable({})", inner.type_name()),
             TypeDesc::LowCardinality(inner) => format!("LowCardinality({})", inner.type_name()),
             TypeDesc::Array(inner) => format!("Array({})", inner.type_name()),
@@ -148,6 +203,68 @@ pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
         "IPv4" => Ok(TypeDesc::Ipv4),
         "IPv6" => Ok(TypeDesc::Ipv6),
         _ => {
+            if let Some(inner) = trimmed.strip_prefix("Decimal(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Decimal type"))?;
+                let (precision, scale) = parse_decimal_precision_scale(inner)?;
+                let size = decimal_size_for_precision(precision)?;
+                return Ok(TypeDesc::Decimal {
+                    precision,
+                    scale,
+                    size,
+                });
+            }
+            if let Some(inner) = trimmed.strip_prefix("Decimal32(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Decimal32 type"))?;
+                let scale = parse_decimal_scale(inner, 9)?;
+                return Ok(TypeDesc::Decimal32 { scale });
+            }
+            if let Some(inner) = trimmed.strip_prefix("Decimal64(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Decimal64 type"))?;
+                let scale = parse_decimal_scale(inner, 18)?;
+                return Ok(TypeDesc::Decimal64 { scale });
+            }
+            if let Some(inner) = trimmed.strip_prefix("Decimal128(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Decimal128 type"))?;
+                let scale = parse_decimal_scale(inner, 38)?;
+                return Ok(TypeDesc::Decimal128 { scale });
+            }
+            if let Some(inner) = trimmed.strip_prefix("Decimal256(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Decimal256 type"))?;
+                let scale = parse_decimal_scale(inner, 76)?;
+                return Ok(TypeDesc::Decimal256 { scale });
+            }
+            if let Some(inner) = trimmed.strip_prefix("Enum8(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Enum8 type"))?;
+                let values = parse_enum_variants(inner, EnumStorage::Enum8)?;
+                let values = values
+                    .into_iter()
+                    .map(|(name, value)| {
+                        let value = i8::try_from(value)
+                            .map_err(|_| Error::InvalidValue("Enum8 value out of range"))?;
+                        Ok((name, value))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                return Ok(TypeDesc::Enum8(values));
+            }
+            if let Some(inner) = trimmed.strip_prefix("Enum16(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Enum16 type"))?;
+                let values = parse_enum_variants(inner, EnumStorage::Enum16)?;
+                return Ok(TypeDesc::Enum16(values));
+            }
             if let Some(inner) = trimmed.strip_prefix("LowCardinality(") {
                 let inner = inner
                     .strip_suffix(')')
@@ -262,7 +379,14 @@ fn can_be_inside_low_cardinality(desc: &TypeDesc) -> bool {
         TypeDesc::LowCardinality(_)
         | TypeDesc::Array(_)
         | TypeDesc::Map { .. }
-        | TypeDesc::DateTime64 { .. } => false,
+        | TypeDesc::DateTime64 { .. }
+        | TypeDesc::Decimal { .. }
+        | TypeDesc::Decimal32 { .. }
+        | TypeDesc::Decimal64 { .. }
+        | TypeDesc::Decimal128 { .. }
+        | TypeDesc::Decimal256 { .. }
+        | TypeDesc::Enum8(_)
+        | TypeDesc::Enum16(_) => false,
     }
 }
 
@@ -323,6 +447,182 @@ fn parse_map_descriptor(input: &str) -> Result<(TypeDesc, TypeDesc)> {
     Ok((key, value))
 }
 
+fn parse_decimal_precision_scale(input: &str) -> Result<(u8, u8)> {
+    let mut parts = input.splitn(2, ',').map(str::trim);
+    let precision_part = parts
+        .next()
+        .ok_or(Error::InvalidValue("missing Decimal precision"))?;
+    let scale_part = parts
+        .next()
+        .ok_or(Error::InvalidValue("missing Decimal scale"))?;
+    let precision: u8 = precision_part
+        .parse()
+        .map_err(|_| Error::InvalidValue("invalid Decimal precision"))?;
+    let scale: u8 = scale_part
+        .parse()
+        .map_err(|_| Error::InvalidValue("invalid Decimal scale"))?;
+    if precision == 0 {
+        return Err(Error::InvalidValue("Decimal precision must be > 0"));
+    }
+    if scale > precision {
+        return Err(Error::InvalidValue("Decimal scale must be <= precision"));
+    }
+    Ok((precision, scale))
+}
+
+fn parse_decimal_scale(input: &str, max_scale: u8) -> Result<u8> {
+    let scale: u8 = input
+        .trim()
+        .parse()
+        .map_err(|_| Error::InvalidValue("invalid Decimal scale"))?;
+    if scale > max_scale {
+        return Err(Error::InvalidValue("Decimal scale exceeds max precision"));
+    }
+    Ok(scale)
+}
+
+fn decimal_size_for_precision(precision: u8) -> Result<DecimalSize> {
+    match precision {
+        1..=9 => Ok(DecimalSize::Bits32),
+        10..=18 => Ok(DecimalSize::Bits64),
+        19..=38 => Ok(DecimalSize::Bits128),
+        39..=76 => Ok(DecimalSize::Bits256),
+        _ => Err(Error::InvalidValue(
+            "Decimal precision must be between 1 and 76",
+        )),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum EnumStorage {
+    Enum8,
+    Enum16,
+}
+
+fn parse_enum_variants(input: &str, storage: EnumStorage) -> Result<Vec<(String, i16)>> {
+    let entries = split_top_level_commas(input);
+    if entries.is_empty() {
+        return Err(Error::InvalidValue("Enum must have at least one value"));
+    }
+    let mut variants = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let (name, value) = parse_enum_entry(entry)?;
+        let value = match storage {
+            EnumStorage::Enum8 => {
+                if value < i64::from(i8::MIN) || value > i64::from(i8::MAX) {
+                    return Err(Error::InvalidValue("Enum8 value out of range"));
+                }
+                i16::from(
+                    i8::try_from(value)
+                        .map_err(|_| Error::InvalidValue("Enum8 value out of range"))?,
+                )
+            }
+            EnumStorage::Enum16 => {
+                if value < i64::from(i16::MIN) || value > i64::from(i16::MAX) {
+                    return Err(Error::InvalidValue("Enum16 value out of range"));
+                }
+                i16::try_from(value)
+                    .map_err(|_| Error::InvalidValue("Enum16 value out of range"))?
+            }
+        };
+        variants.push((name, value));
+    }
+    Ok(variants)
+}
+
+fn parse_enum_entry(input: &str) -> Result<(String, i64)> {
+    let mut in_quote = false;
+    let mut escape = false;
+    let mut split = None;
+    for (idx, ch) in input.char_indices() {
+        if escape {
+            escape = false;
+            continue;
+        }
+        match ch {
+            '\\' if in_quote => escape = true,
+            '\'' => in_quote = !in_quote,
+            '=' if !in_quote => {
+                split = Some(idx);
+                break;
+            }
+            _ => {}
+        }
+    }
+    let split = split.ok_or(Error::InvalidValue("Enum entry must contain '='"))?;
+    let (left, right) = input.split_at(split);
+    let name = parse_quoted_string(left.trim())?;
+    let value: i64 = right[1..]
+        .trim()
+        .parse()
+        .map_err(|_| Error::InvalidValue("invalid Enum value"))?;
+    Ok((name, value))
+}
+
+fn parse_quoted_string(input: &str) -> Result<String> {
+    let mut chars = input.chars();
+    if chars.next() != Some('\'') || !input.ends_with('\'') || input.len() < 2 {
+        return Err(Error::InvalidValue("Enum name must be single-quoted"));
+    }
+    let mut result = String::new();
+    let mut escape = false;
+    for ch in input[1..input.len() - 1].chars() {
+        if escape {
+            result.push(ch);
+            escape = false;
+        } else if ch == '\\' {
+            escape = true;
+        } else {
+            result.push(ch);
+        }
+    }
+    if escape {
+        return Err(Error::InvalidValue("invalid escape in Enum name"));
+    }
+    Ok(result)
+}
+
+fn split_top_level_commas(input: &str) -> Vec<&str> {
+    let mut entries = Vec::new();
+    let mut in_quote = false;
+    let mut escape = false;
+    let mut start = 0;
+    for (idx, ch) in input.char_indices() {
+        if escape {
+            escape = false;
+            continue;
+        }
+        match ch {
+            '\\' if in_quote => escape = true,
+            '\'' => in_quote = !in_quote,
+            ',' if !in_quote => {
+                entries.push(input[start..idx].trim());
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    if start < input.len() {
+        let tail = input[start..].trim();
+        if !tail.is_empty() {
+            entries.push(tail);
+        }
+    }
+    entries
+}
+
+fn format_enum<T: fmt::Display>(prefix: &str, values: &[(String, T)]) -> String {
+    let entries: Vec<String> = values
+        .iter()
+        .map(|(name, value)| format!("'{}' = {}", escape_enum_name(name), value))
+        .collect();
+    format!("{prefix}({})", entries.join(", "))
+}
+
+fn escape_enum_name(name: &str) -> String {
+    name.replace('\'', "\\'")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,5 +641,29 @@ mod tests {
         assert!(matches!(err, Error::UnsupportedCombination(_)));
         let err = parse_type_desc("Map(LowCardinality(Nullable(String)), UInt8)").unwrap_err();
         assert!(matches!(err, Error::UnsupportedCombination(_)));
+    }
+
+    #[test]
+    fn rejects_low_cardinality_decimal_and_enum() {
+        let decimals = [
+            "LowCardinality(Decimal(9,2))",
+            "LowCardinality(Decimal32(2))",
+            "LowCardinality(Decimal64(2))",
+            "LowCardinality(Decimal128(2))",
+            "LowCardinality(Decimal256(2))",
+        ];
+        for ty in decimals {
+            let err = parse_type_desc(ty).unwrap_err();
+            assert!(matches!(err, Error::UnsupportedCombination(_)));
+        }
+
+        let enums = [
+            "LowCardinality(Enum8('a' = 1, 'b' = 2))",
+            "LowCardinality(Enum16('a' = 1, 'b' = 2))",
+        ];
+        for ty in enums {
+            let err = parse_type_desc(ty).unwrap_err();
+            assert!(matches!(err, Error::UnsupportedCombination(_)));
+        }
     }
 }

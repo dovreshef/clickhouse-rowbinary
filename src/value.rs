@@ -45,6 +45,18 @@ pub enum Value {
     Ipv4(Ipv4Addr),
     /// IPv6 address column.
     Ipv6(Ipv6Addr),
+    /// Decimal32 stored as a scaled 32-bit integer.
+    Decimal32(i32),
+    /// Decimal64 stored as a scaled 64-bit integer.
+    Decimal64(i64),
+    /// Decimal128 stored as a scaled 128-bit integer.
+    Decimal128(i128),
+    /// Decimal256 stored as little-endian two's complement bytes.
+    Decimal256([u8; 32]),
+    /// Enum8 stored as an 8-bit integer.
+    Enum8(i8),
+    /// Enum16 stored as a 16-bit integer.
+    Enum16(i16),
     /// Nullable wrapper around another value.
     Nullable(Option<Box<Value>>),
     /// Array of nested values.
@@ -77,6 +89,12 @@ impl Value {
             Value::Uuid(_) => "UUID",
             Value::Ipv4(_) => "IPv4",
             Value::Ipv6(_) => "IPv6",
+            Value::Decimal32(_) => "Decimal32",
+            Value::Decimal64(_) => "Decimal64",
+            Value::Decimal128(_) => "Decimal128",
+            Value::Decimal256(_) => "Decimal256",
+            Value::Enum8(_) => "Enum8",
+            Value::Enum16(_) => "Enum16",
             Value::Nullable(_) => "Nullable",
             Value::Array(_) => "Array",
             Value::Map(_) => "Map",

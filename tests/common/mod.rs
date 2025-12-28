@@ -54,6 +54,14 @@ impl ClickhouseServer {
         Self::expect_success(self.send_query(sql, None, Some(settings)), "SQL failed");
     }
 
+    /// Attempts to execute SQL with settings and reports success.
+    pub fn try_exec_with_settings(&self, sql: &str, settings: &str) -> bool {
+        match self.send_query(sql, None, Some(settings)) {
+            Ok(response) => response.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
     /// Streams a `RowBinary` payload into an INSERT statement.
     pub fn insert_rowbinary(
         &self,
@@ -166,6 +174,52 @@ pub fn decode_rows(payload: &[u8], format: RowBinaryFormat, schema: &Schema) -> 
         rows.push(row);
     }
     rows
+}
+
+/// Formats a scaled integer as a decimal string with the given scale.
+pub fn decimal_string(value: i128, scale: u32) -> String {
+    let negative = value < 0;
+    let mut digits = value.abs().to_string();
+    let scale = scale as usize;
+    if scale > 0 {
+        if digits.len() <= scale {
+            let zeros = scale + 1 - digits.len();
+            digits = "0".repeat(zeros) + &digits;
+        }
+        let split = digits.len() - scale;
+        digits.insert(split, '.');
+    }
+    if negative {
+        format!("-{digits}")
+    } else {
+        digits
+    }
+}
+
+/// Formats a scaled integer as a JSON number.
+pub fn decimal_json(value: i128, scale: u32) -> JsonValue {
+    let mut value = decimal_string(value, scale);
+    if let Some(dot) = value.find('.') {
+        while value.ends_with('0') {
+            value.pop();
+        }
+        if value.ends_with('.') {
+            value.truncate(dot);
+        }
+    }
+    serde_json::from_str(&value).unwrap()
+}
+
+/// Encodes an `i128` into a 256-bit two's complement little-endian buffer.
+pub fn decimal256_from_i128(value: i128) -> [u8; 32] {
+    let mut out = [0_u8; 32];
+    out[..16].copy_from_slice(&value.to_le_bytes());
+    if value < 0 {
+        for byte in &mut out[16..] {
+            *byte = 0xFF;
+        }
+    }
+    out
 }
 
 /// Generates a unique table name for isolation. Incorporates the current test
