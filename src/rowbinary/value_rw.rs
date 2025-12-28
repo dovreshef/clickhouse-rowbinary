@@ -54,6 +54,16 @@ pub(crate) fn read_value_optional<R: Read + ?Sized>(
 ) -> Result<Option<Value>> {
     match ty {
         TypeDesc::UInt8 => read_fixed::<_, _, 1>(reader, |bytes| Value::UInt8(bytes[0])),
+        TypeDesc::Bool => {
+            let mut buf = [0_u8; 1];
+            if read_exact_or_eof(reader, &mut buf)? {
+                return Ok(None);
+            }
+            if buf[0] > 1 {
+                return Err(Error::InvalidValue("invalid Bool value"));
+            }
+            Ok(Some(Value::Bool(buf[0] == 1)))
+        }
         TypeDesc::UInt16 => {
             read_fixed::<_, _, 2>(reader, |bytes| Value::UInt16(u16::from_le_bytes(bytes)))
         }
@@ -63,6 +73,10 @@ pub(crate) fn read_value_optional<R: Read + ?Sized>(
         TypeDesc::UInt64 => {
             read_fixed::<_, _, 8>(reader, |bytes| Value::UInt64(u64::from_le_bytes(bytes)))
         }
+        TypeDesc::UInt128 => {
+            read_fixed::<_, _, 16>(reader, |bytes| Value::UInt128(u128::from_le_bytes(bytes)))
+        }
+        TypeDesc::UInt256 => read_fixed::<_, _, 32>(reader, Value::UInt256),
         TypeDesc::Int8 => {
             read_fixed::<_, _, 1>(reader, |bytes| Value::Int8(i8::from_le_bytes(bytes)))
         }
@@ -75,6 +89,10 @@ pub(crate) fn read_value_optional<R: Read + ?Sized>(
         TypeDesc::Int64 => {
             read_fixed::<_, _, 8>(reader, |bytes| Value::Int64(i64::from_le_bytes(bytes)))
         }
+        TypeDesc::Int128 => {
+            read_fixed::<_, _, 16>(reader, |bytes| Value::Int128(i128::from_le_bytes(bytes)))
+        }
+        TypeDesc::Int256 => read_fixed::<_, _, 32>(reader, Value::Int256),
         TypeDesc::Float32 => read_fixed(reader, |bytes| Value::Float32(f32::from_le_bytes(bytes))),
         TypeDesc::Float64 => read_fixed(reader, |bytes| Value::Float64(f64::from_le_bytes(bytes))),
         TypeDesc::String => {
@@ -228,11 +246,21 @@ pub(crate) fn write_value<W: Write + ?Sized>(
 ) -> Result<()> {
     match (ty, value) {
         (TypeDesc::UInt8, Value::UInt8(value)) => writer.write_all(&[*value])?,
+        (TypeDesc::Bool, Value::Bool(value)) => {
+            writer.write_all(&[u8::from(*value)])?;
+        }
         (TypeDesc::UInt16, Value::UInt16(value)) | (TypeDesc::Date, Value::Date(value)) => {
             writer.write_all(&value.to_le_bytes())?;
         }
         (TypeDesc::UInt32, Value::UInt32(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::UInt64, Value::UInt64(value)) => writer.write_all(&value.to_le_bytes())?,
+        (TypeDesc::UInt128, Value::UInt128(value)) => {
+            writer.write_all(&value.to_le_bytes())?;
+        }
+        (TypeDesc::UInt256, Value::UInt256(value))
+        | (TypeDesc::Decimal256 { .. }, Value::Decimal256(value)) => {
+            writer.write_all(value)?;
+        }
         (TypeDesc::Int8, Value::Int8(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::Int16, Value::Int16(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::Int32, Value::Int32(value))
@@ -241,6 +269,8 @@ pub(crate) fn write_value<W: Write + ?Sized>(
             writer.write_all(&value.to_le_bytes())?;
         }
         (TypeDesc::Int64, Value::Int64(value)) => writer.write_all(&value.to_le_bytes())?,
+        (TypeDesc::Int128, Value::Int128(value)) => writer.write_all(&value.to_le_bytes())?,
+        (TypeDesc::Int256, Value::Int256(value)) => writer.write_all(value)?,
         (TypeDesc::Float32, Value::Float32(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::Float64, Value::Float64(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::String, Value::String(value)) => write_bytes(value, writer)?,
@@ -271,9 +301,6 @@ pub(crate) fn write_value<W: Write + ?Sized>(
         }
         (TypeDesc::Decimal128 { .. }, Value::Decimal128(value)) => {
             writer.write_all(&value.to_le_bytes())?;
-        }
-        (TypeDesc::Decimal256 { .. }, Value::Decimal256(value)) => {
-            writer.write_all(value)?;
         }
         (TypeDesc::Decimal { size, .. }, value) => match (size, value) {
             (DecimalSize::Bits32, Value::Decimal32(value)) => {

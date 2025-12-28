@@ -9,12 +9,18 @@ use crate::error::{Error, Result};
 pub enum TypeDesc {
     /// Unsigned 8-bit integer.
     UInt8,
+    /// Boolean stored as 8-bit integer.
+    Bool,
     /// Unsigned 16-bit integer.
     UInt16,
     /// Unsigned 32-bit integer.
     UInt32,
     /// Unsigned 64-bit integer.
     UInt64,
+    /// Unsigned 128-bit integer.
+    UInt128,
+    /// Unsigned 256-bit integer.
+    UInt256,
     /// Signed 8-bit integer.
     Int8,
     /// Signed 16-bit integer.
@@ -23,6 +29,10 @@ pub enum TypeDesc {
     Int32,
     /// Signed 64-bit integer.
     Int64,
+    /// Signed 128-bit integer.
+    Int128,
+    /// Signed 256-bit integer.
+    Int256,
     /// 32-bit floating point number.
     Float32,
     /// 64-bit floating point number.
@@ -136,13 +146,18 @@ impl TypeDesc {
     pub fn type_name(&self) -> String {
         match self {
             TypeDesc::UInt8 => "UInt8".into(),
+            TypeDesc::Bool => "Bool".into(),
             TypeDesc::UInt16 => "UInt16".into(),
             TypeDesc::UInt32 => "UInt32".into(),
             TypeDesc::UInt64 => "UInt64".into(),
+            TypeDesc::UInt128 => "UInt128".into(),
+            TypeDesc::UInt256 => "UInt256".into(),
             TypeDesc::Int8 => "Int8".into(),
             TypeDesc::Int16 => "Int16".into(),
             TypeDesc::Int32 => "Int32".into(),
             TypeDesc::Int64 => "Int64".into(),
+            TypeDesc::Int128 => "Int128".into(),
+            TypeDesc::Int256 => "Int256".into(),
             TypeDesc::Float32 => "Float32".into(),
             TypeDesc::Float64 => "Float64".into(),
             TypeDesc::String => "String".into(),
@@ -201,13 +216,18 @@ pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
     let trimmed = input.trim();
     match trimmed {
         "UInt8" => Ok(TypeDesc::UInt8),
+        "Bool" => Ok(TypeDesc::Bool),
         "UInt16" => Ok(TypeDesc::UInt16),
         "UInt32" => Ok(TypeDesc::UInt32),
         "UInt64" => Ok(TypeDesc::UInt64),
+        "UInt128" => Ok(TypeDesc::UInt128),
+        "UInt256" => Ok(TypeDesc::UInt256),
         "Int8" => Ok(TypeDesc::Int8),
         "Int16" => Ok(TypeDesc::Int16),
         "Int32" => Ok(TypeDesc::Int32),
         "Int64" => Ok(TypeDesc::Int64),
+        "Int128" => Ok(TypeDesc::Int128),
+        "Int256" => Ok(TypeDesc::Int256),
         "Float32" => Ok(TypeDesc::Float32),
         "Float64" => Ok(TypeDesc::Float64),
         "String" => Ok(TypeDesc::String),
@@ -392,13 +412,18 @@ pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
 fn can_be_inside_low_cardinality(desc: &TypeDesc) -> bool {
     match desc {
         TypeDesc::UInt8
+        | TypeDesc::Bool
         | TypeDesc::UInt16
         | TypeDesc::UInt32
         | TypeDesc::UInt64
+        | TypeDesc::UInt128
+        | TypeDesc::UInt256
         | TypeDesc::Int8
         | TypeDesc::Int16
         | TypeDesc::Int32
         | TypeDesc::Int64
+        | TypeDesc::Int128
+        | TypeDesc::Int256
         | TypeDesc::Float32
         | TypeDesc::Float64
         | TypeDesc::String

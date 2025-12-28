@@ -35,7 +35,7 @@ and multi-threaded producers).
 ## Supported Types
 
 Currently supported:
-- Integers, floats, `String`, `FixedString`.
+- Integers (including 128/256-bit), `Bool`, floats, `String`, `FixedString`.
 - `Decimal`, `Decimal32`, `Decimal64`, `Decimal128`, `Decimal256`.
 - `Enum8`, `Enum16`.
 - `Date`, `Date32`, `DateTime`, `DateTime64`.

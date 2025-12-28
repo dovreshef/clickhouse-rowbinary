@@ -222,6 +222,13 @@ pub fn decimal256_from_i128(value: i128) -> [u8; 32] {
     out
 }
 
+/// Encodes a `u128` into a 256-bit little-endian buffer.
+pub fn uint256_from_u128(value: u128) -> [u8; 32] {
+    let mut out = [0_u8; 32];
+    out[..16].copy_from_slice(&value.to_le_bytes());
+    out
+}
+
 /// Generates a unique table name for isolation. Incorporates the current test
 /// name (when available) to avoid collisions between concurrent tests.
 pub fn unique_table(prefix: &str) -> String {

@@ -9,12 +9,18 @@ use uuid::Uuid;
 pub enum Value {
     /// Unsigned 8-bit integer.
     UInt8(u8),
+    /// Boolean stored as 8-bit integer.
+    Bool(bool),
     /// Unsigned 16-bit integer.
     UInt16(u16),
     /// Unsigned 32-bit integer.
     UInt32(u32),
     /// Unsigned 64-bit integer.
     UInt64(u64),
+    /// Unsigned 128-bit integer.
+    UInt128(u128),
+    /// Unsigned 256-bit integer (little-endian).
+    UInt256([u8; 32]),
     /// Signed 8-bit integer.
     Int8(i8),
     /// Signed 16-bit integer.
@@ -23,6 +29,10 @@ pub enum Value {
     Int32(i32),
     /// Signed 64-bit integer.
     Int64(i64),
+    /// Signed 128-bit integer.
+    Int128(i128),
+    /// Signed 256-bit integer (little-endian two's complement).
+    Int256([u8; 32]),
     /// 32-bit floating point number.
     Float32(f32),
     /// 64-bit floating point number.
@@ -73,13 +83,18 @@ impl Value {
     pub fn type_name(&self) -> &'static str {
         match self {
             Value::UInt8(_) => "UInt8",
+            Value::Bool(_) => "Bool",
             Value::UInt16(_) => "UInt16",
             Value::UInt32(_) => "UInt32",
             Value::UInt64(_) => "UInt64",
+            Value::UInt128(_) => "UInt128",
+            Value::UInt256(_) => "UInt256",
             Value::Int8(_) => "Int8",
             Value::Int16(_) => "Int16",
             Value::Int32(_) => "Int32",
             Value::Int64(_) => "Int64",
+            Value::Int128(_) => "Int128",
+            Value::Int256(_) => "Int256",
             Value::Float32(_) => "Float32",
             Value::Float64(_) => "Float64",
             Value::String(_) => "String",
