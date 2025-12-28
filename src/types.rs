@@ -102,6 +102,8 @@ pub enum TypeDesc {
         /// Map value type.
         value: Box<TypeDesc>,
     },
+    /// Tuple of ordered values.
+    Tuple(Vec<TypeDesc>),
 }
 
 /// Backing storage size for Decimal types.
@@ -165,6 +167,14 @@ impl TypeDesc {
             TypeDesc::Map { key, value } => {
                 format!("Map({}, {})", key.type_name(), value.type_name())
             }
+            TypeDesc::Tuple(items) => format!(
+                "Tuple({})",
+                items
+                    .iter()
+                    .map(TypeDesc::type_name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 }
@@ -293,6 +303,11 @@ pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
                         "Nullable(Nullable(T)) is unsupported".into(),
                     ));
                 }
+                if matches!(desc, TypeDesc::Tuple(_)) {
+                    return Err(Error::UnsupportedCombination(
+                        "Nullable(Tuple(...)) is unsupported".into(),
+                    ));
+                }
                 return Ok(TypeDesc::Nullable(Box::new(desc)));
             }
             if let Some(inner) = trimmed.strip_prefix("Array(") {
@@ -317,6 +332,13 @@ pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
                     key: Box::new(key),
                     value: Box::new(value),
                 });
+            }
+            if let Some(inner) = trimmed.strip_prefix("Tuple(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Tuple type"))?;
+                let items = parse_tuple_descriptor(inner)?;
+                return Ok(TypeDesc::Tuple(items));
             }
             if let Some(inner) = trimmed.strip_prefix("DateTime(") {
                 let inner = inner
@@ -379,6 +401,7 @@ fn can_be_inside_low_cardinality(desc: &TypeDesc) -> bool {
         TypeDesc::LowCardinality(_)
         | TypeDesc::Array(_)
         | TypeDesc::Map { .. }
+        | TypeDesc::Tuple(_)
         | TypeDesc::DateTime64 { .. }
         | TypeDesc::Decimal { .. }
         | TypeDesc::Decimal32 { .. }
@@ -445,6 +468,19 @@ fn parse_map_descriptor(input: &str) -> Result<(TypeDesc, TypeDesc)> {
     let key = parse_type_desc(left.trim())?;
     let value = parse_type_desc(right[1..].trim())?;
     Ok((key, value))
+}
+
+fn parse_tuple_descriptor(input: &str) -> Result<Vec<TypeDesc>> {
+    let items = split_top_level_commas_with_parens(input);
+    if items.is_empty() {
+        return Err(Error::InvalidValue("Tuple expects at least one type"));
+    }
+    let mut types = Vec::with_capacity(items.len());
+    for item in items {
+        let desc = parse_type_desc(item)?;
+        types.push(desc);
+    }
+    Ok(types)
 }
 
 fn parse_decimal_precision_scale(input: &str) -> Result<(u8, u8)> {
@@ -611,6 +647,38 @@ fn split_top_level_commas(input: &str) -> Vec<&str> {
     entries
 }
 
+fn split_top_level_commas_with_parens(input: &str) -> Vec<&str> {
+    let mut entries = Vec::new();
+    let mut in_quote = false;
+    let mut escape = false;
+    let mut depth = 0_i32;
+    let mut start = 0;
+    for (idx, ch) in input.char_indices() {
+        if escape {
+            escape = false;
+            continue;
+        }
+        match ch {
+            '\\' if in_quote => escape = true,
+            '\'' => in_quote = !in_quote,
+            '(' if !in_quote => depth += 1,
+            ')' if !in_quote => depth -= 1,
+            ',' if !in_quote && depth == 0 => {
+                entries.push(input[start..idx].trim());
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    if start < input.len() {
+        let tail = input[start..].trim();
+        if !tail.is_empty() {
+            entries.push(tail);
+        }
+    }
+    entries
+}
+
 fn format_enum<T: fmt::Display>(prefix: &str, values: &[(String, T)]) -> String {
     let entries: Vec<String> = values
         .iter()
@@ -665,5 +733,11 @@ mod tests {
             let err = parse_type_desc(ty).unwrap_err();
             assert!(matches!(err, Error::UnsupportedCombination(_)));
         }
+    }
+
+    #[test]
+    fn rejects_low_cardinality_tuple() {
+        let err = parse_type_desc("LowCardinality(Tuple(UInt8, String))").unwrap_err();
+        assert!(matches!(err, Error::UnsupportedCombination(_)));
     }
 }

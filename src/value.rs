@@ -63,6 +63,8 @@ pub enum Value {
     Array(Vec<Value>),
     /// Map represented as key/value pairs.
     Map(Vec<(Value, Value)>),
+    /// Tuple represented as ordered values.
+    Tuple(Vec<Value>),
 }
 
 impl Value {
@@ -98,6 +100,7 @@ impl Value {
             Value::Nullable(_) => "Nullable",
             Value::Array(_) => "Array",
             Value::Map(_) => "Map",
+            Value::Tuple(_) => "Tuple",
         }
     }
 }

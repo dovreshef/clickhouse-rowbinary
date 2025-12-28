@@ -525,6 +525,21 @@ fn read_value_optional<R: Read + ?Sized>(ty: &TypeDesc, reader: &mut R) -> Resul
             }
             Ok(Some(Value::Map(entries)))
         }
+        TypeDesc::Tuple(items) => {
+            let mut iter = items.iter();
+            let Some(first) = iter.next() else {
+                return Ok(Some(Value::Tuple(Vec::new())));
+            };
+            let Some(first_value) = read_value_optional(first, reader)? else {
+                return Ok(None);
+            };
+            let mut values = Vec::with_capacity(items.len());
+            values.push(first_value);
+            for item in iter {
+                values.push(read_value_required(item, reader)?);
+            }
+            Ok(Some(Value::Tuple(values)))
+        }
     }
 }
 
@@ -639,6 +654,14 @@ fn write_value<W: Write + ?Sized>(ty: &TypeDesc, value: &Value, writer: &mut W) 
             for (entry_key, entry_value) in entries {
                 write_value(key, entry_key, writer)?;
                 write_value(value, entry_value, writer)?;
+            }
+        }
+        (TypeDesc::Tuple(items), Value::Tuple(values)) => {
+            if items.len() != values.len() {
+                return Err(Error::InvalidValue("Tuple length mismatch"));
+            }
+            for (item, value) in items.iter().zip(values.iter()) {
+                write_value(item, value, writer)?;
             }
         }
         (ty, value) => {
