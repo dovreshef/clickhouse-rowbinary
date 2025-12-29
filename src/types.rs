@@ -11,6 +11,8 @@ const JSON_MAX_TYPED_PATHS: usize = 1000;
 /// Parsed `ClickHouse` type descriptor.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeDesc {
+    /// Empty type with no stored values.
+    Nothing,
     /// Unsigned 8-bit integer.
     UInt8,
     /// Boolean stored as 8-bit integer.
@@ -41,6 +43,10 @@ pub enum TypeDesc {
     Float32,
     /// 64-bit floating point number.
     Float64,
+    /// 16-bit floating point number.
+    Float16,
+    /// 16-bit bfloat number.
+    BFloat16,
     /// Variable-length string.
     String,
     /// Fixed-width string.
@@ -120,6 +126,8 @@ pub enum TypeDesc {
     Tuple(Vec<TupleItem>),
     /// Nested type (Array of Tuple) with named elements.
     Nested(Vec<TupleItem>),
+    /// Variant type storing one of the listed variants.
+    Variant(Vec<TypeDesc>),
     /// Dynamic value storing per-row type info.
     Dynamic {
         /// Optional max dynamic types setting.
@@ -167,6 +175,7 @@ impl TypeDesc {
     #[must_use]
     pub fn type_name(&self) -> String {
         match self {
+            TypeDesc::Nothing => "Nothing".into(),
             TypeDesc::UInt8 => "UInt8".into(),
             TypeDesc::Bool => "Bool".into(),
             TypeDesc::UInt16 => "UInt16".into(),
@@ -182,6 +191,8 @@ impl TypeDesc {
             TypeDesc::Int256 => "Int256".into(),
             TypeDesc::Float32 => "Float32".into(),
             TypeDesc::Float64 => "Float64".into(),
+            TypeDesc::Float16 => "Float16".into(),
+            TypeDesc::BFloat16 => "BFloat16".into(),
             TypeDesc::String => "String".into(),
             TypeDesc::FixedString { length } => format!("FixedString({length})"),
             TypeDesc::Date => "Date".into(),
@@ -217,6 +228,7 @@ impl TypeDesc {
             }
             TypeDesc::Tuple(items) => format!("Tuple({})", format_tuple_items(items)),
             TypeDesc::Nested(items) => format!("Nested({})", format_tuple_items(items)),
+            TypeDesc::Variant(items) => format!("Variant({})", format_variant_items(items)),
             TypeDesc::Dynamic { max_types } => match max_types {
                 Some(max_types) => format!("Dynamic(max_types={max_types})"),
                 None => "Dynamic".into(),
@@ -254,6 +266,7 @@ impl fmt::Display for TypeDesc {
 pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
     let trimmed = input.trim();
     match trimmed {
+        "Nothing" => Ok(TypeDesc::Nothing),
         "UInt8" => Ok(TypeDesc::UInt8),
         "Bool" => Ok(TypeDesc::Bool),
         "UInt16" => Ok(TypeDesc::UInt16),
@@ -269,6 +282,8 @@ pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
         "Int256" => Ok(TypeDesc::Int256),
         "Float32" => Ok(TypeDesc::Float32),
         "Float64" => Ok(TypeDesc::Float64),
+        "Float16" => Ok(TypeDesc::Float16),
+        "BFloat16" => Ok(TypeDesc::BFloat16),
         "String" => Ok(TypeDesc::String),
         "Date" => Ok(TypeDesc::Date),
         "Date32" => Ok(TypeDesc::Date32),
@@ -453,6 +468,13 @@ pub fn parse_type_desc(input: &str) -> Result<TypeDesc> {
                 let items = parse_nested_descriptor(inner)?;
                 return Ok(TypeDesc::Nested(items));
             }
+            if let Some(inner) = trimmed.strip_prefix("Variant(") {
+                let inner = inner
+                    .strip_suffix(')')
+                    .ok_or(Error::InvalidValue("unterminated Variant type"))?;
+                let variants = parse_variant_descriptor(inner)?;
+                return Ok(TypeDesc::Variant(variants));
+            }
             if let Some(inner) = trimmed.strip_prefix("DateTime(") {
                 let inner = inner
                     .strip_suffix(')')
@@ -507,6 +529,8 @@ pub(crate) fn can_be_inside_low_cardinality(desc: &TypeDesc) -> bool {
         | TypeDesc::Int256
         | TypeDesc::Float32
         | TypeDesc::Float64
+        | TypeDesc::Float16
+        | TypeDesc::BFloat16
         | TypeDesc::String
         | TypeDesc::FixedString { .. }
         | TypeDesc::Date
@@ -521,6 +545,7 @@ pub(crate) fn can_be_inside_low_cardinality(desc: &TypeDesc) -> bool {
         | TypeDesc::Map { .. }
         | TypeDesc::Tuple(_)
         | TypeDesc::Nested(_)
+        | TypeDesc::Variant(_)
         | TypeDesc::Dynamic { .. }
         | TypeDesc::Json { .. }
         | TypeDesc::DateTime64 { .. }
@@ -530,13 +555,14 @@ pub(crate) fn can_be_inside_low_cardinality(desc: &TypeDesc) -> bool {
         | TypeDesc::Decimal128 { .. }
         | TypeDesc::Decimal256 { .. }
         | TypeDesc::Enum8(_)
-        | TypeDesc::Enum16(_) => false,
+        | TypeDesc::Enum16(_)
+        | TypeDesc::Nothing => false,
     }
 }
 
 pub(crate) fn is_valid_map_key(desc: &TypeDesc) -> bool {
     match desc {
-        TypeDesc::Nullable(_) => false,
+        TypeDesc::Nothing | TypeDesc::Nullable(_) => false,
         TypeDesc::LowCardinality(inner) => !matches!(inner.as_ref(), TypeDesc::Nullable(_)),
         _ => true,
     }
@@ -589,6 +615,58 @@ fn parse_map_descriptor(input: &str) -> Result<(TypeDesc, TypeDesc)> {
     let key = parse_type_desc(left.trim())?;
     let value = parse_type_desc(right[1..].trim())?;
     Ok((key, value))
+}
+
+fn parse_variant_descriptor(input: &str) -> Result<Vec<TypeDesc>> {
+    let items = split_top_level_commas_with_parens(input);
+    let mut variants = Vec::new();
+    for item in items {
+        let trimmed = item.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        variants.push(parse_type_desc(trimmed)?);
+    }
+    canonicalize_variant_types(variants)
+}
+
+fn canonicalize_variant_types(variants: Vec<TypeDesc>) -> Result<Vec<TypeDesc>> {
+    use std::collections::BTreeMap;
+
+    let mut deduped = BTreeMap::new();
+    for variant in variants {
+        if matches!(variant, TypeDesc::Variant(_)) {
+            return Err(Error::UnsupportedCombination(
+                "Variant cannot contain Variant".into(),
+            ));
+        }
+        if matches!(variant, TypeDesc::Dynamic { .. }) {
+            return Err(Error::UnsupportedCombination(
+                "Variant cannot contain Dynamic".into(),
+            ));
+        }
+        if matches!(variant, TypeDesc::Nullable(_))
+            || matches!(variant, TypeDesc::LowCardinality(ref inner) if matches!(inner.as_ref(), TypeDesc::Nullable(_)))
+        {
+            return Err(Error::UnsupportedCombination(
+                "Variant cannot contain Nullable or LowCardinality(Nullable)".into(),
+            ));
+        }
+        if matches!(variant, TypeDesc::Nothing) {
+            continue;
+        }
+        deduped.insert(variant.type_name(), variant);
+    }
+
+    if deduped.is_empty() {
+        return Err(Error::InvalidValue("Variant expects at least one type"));
+    }
+
+    if deduped.len() > u8::MAX as usize {
+        return Err(Error::InvalidValue("Variant has too many nested types"));
+    }
+
+    Ok(deduped.into_values().collect())
 }
 
 fn parse_tuple_descriptor(input: &str) -> Result<Vec<TupleItem>> {
@@ -891,6 +969,14 @@ fn format_tuple_items(items: &[TupleItem]) -> String {
         .join(", ")
 }
 
+fn format_variant_items(items: &[TypeDesc]) -> String {
+    items
+        .iter()
+        .map(TypeDesc::type_name)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn format_identifier(name: &str) -> String {
     let simple = name
         .chars()
@@ -1140,5 +1226,42 @@ mod tests {
                 skip_regexps: vec!["^c".to_string()],
             }
         );
+    }
+
+    #[test]
+    fn parses_float16_bfloat16_nothing() {
+        assert_eq!(parse_type_desc("Float16").unwrap(), TypeDesc::Float16);
+        assert_eq!(parse_type_desc("BFloat16").unwrap(), TypeDesc::BFloat16);
+        assert_eq!(parse_type_desc("Nothing").unwrap(), TypeDesc::Nothing);
+    }
+
+    #[test]
+    fn parses_variant_types() {
+        assert_eq!(
+            parse_type_desc("Variant(UInt8, String)").unwrap(),
+            TypeDesc::Variant(vec![TypeDesc::String, TypeDesc::UInt8])
+        );
+        assert_eq!(
+            parse_type_desc("Variant(String, Nothing, UInt8)").unwrap(),
+            TypeDesc::Variant(vec![TypeDesc::String, TypeDesc::UInt8])
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_variant_types() {
+        let err = parse_type_desc("Variant(Nullable(UInt8), String)").unwrap_err();
+        assert!(matches!(err, Error::UnsupportedCombination(_)));
+
+        let err = parse_type_desc("Variant(LowCardinality(Nullable(UInt8)), String)").unwrap_err();
+        assert!(matches!(err, Error::UnsupportedCombination(_)));
+
+        let err = parse_type_desc("Variant(Dynamic, String)").unwrap_err();
+        assert!(matches!(err, Error::UnsupportedCombination(_)));
+
+        let err = parse_type_desc("Variant(Variant(UInt8, String))").unwrap_err();
+        assert!(matches!(err, Error::UnsupportedCombination(_)));
+
+        let err = parse_type_desc("Variant(Nothing)").unwrap_err();
+        assert!(matches!(err, Error::InvalidValue(_)));
     }
 }

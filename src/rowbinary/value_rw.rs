@@ -5,6 +5,7 @@ use std::{
     net::{Ipv4Addr, Ipv6Addr},
 };
 
+use half::{bf16, f16};
 use uuid::Uuid;
 
 use crate::{
@@ -97,6 +98,14 @@ pub(crate) fn read_value_optional<R: Read + ?Sized>(
         TypeDesc::Int256 => read_fixed::<_, _, 32>(reader, Value::Int256),
         TypeDesc::Float32 => read_fixed(reader, |bytes| Value::Float32(f32::from_le_bytes(bytes))),
         TypeDesc::Float64 => read_fixed(reader, |bytes| Value::Float64(f64::from_le_bytes(bytes))),
+        TypeDesc::Float16 => read_fixed::<_, _, 2>(reader, |bytes| {
+            let bits = u16::from_le_bytes(bytes);
+            Value::Float16(f16::from_bits(bits).to_f32())
+        }),
+        TypeDesc::BFloat16 => read_fixed::<_, _, 2>(reader, |bytes| {
+            let bits = u16::from_le_bytes(bytes);
+            Value::BFloat16(bf16::from_bits(bits).to_f32())
+        }),
         TypeDesc::String => {
             let Some(bytes) = read_bytes(reader)? else {
                 return Ok(None);
@@ -207,6 +216,26 @@ pub(crate) fn read_value_optional<R: Read + ?Sized>(
             Ok(Some(Value::Map(entries)))
         }
         TypeDesc::Tuple(items) => read_tuple_values(items, reader),
+        TypeDesc::Variant(variants) => {
+            let mut buf = [0_u8; 1];
+            if read_exact_or_eof(reader, &mut buf)? {
+                return Ok(None);
+            }
+            let tag = buf[0];
+            if tag == u8::MAX {
+                return Ok(Some(Value::VariantNull));
+            }
+            let index = usize::from(tag);
+            let variant = variants
+                .get(index)
+                .ok_or(Error::InvalidValue("Variant discriminator out of range"))?;
+            let value = read_value_required(variant, reader)?;
+            Ok(Some(Value::Variant {
+                index: tag,
+                value: Box::new(value),
+            }))
+        }
+        TypeDesc::Nothing => Ok(Some(Value::Nothing)),
         TypeDesc::Nested(items) => {
             let Some(len) = read_uvarint(reader)? else {
                 return Ok(None);
@@ -314,6 +343,14 @@ pub(crate) fn write_value<W: Write + ?Sized>(
         (TypeDesc::Int256, Value::Int256(value)) => writer.write_all(value)?,
         (TypeDesc::Float32, Value::Float32(value)) => writer.write_all(&value.to_le_bytes())?,
         (TypeDesc::Float64, Value::Float64(value)) => writer.write_all(&value.to_le_bytes())?,
+        (TypeDesc::Float16, Value::Float16(value)) => {
+            let bits = f16::from_f32(*value).to_bits();
+            writer.write_all(&bits.to_le_bytes())?;
+        }
+        (TypeDesc::BFloat16, Value::BFloat16(value)) => {
+            let bits = bf16::from_f32(*value).to_bits();
+            writer.write_all(&bits.to_le_bytes())?;
+        }
         (TypeDesc::String, Value::String(value)) => write_bytes(value, writer)?,
         (TypeDesc::FixedString { length }, Value::FixedString(value)) => {
             if value.len() != *length {
@@ -396,6 +433,18 @@ pub(crate) fn write_value<W: Write + ?Sized>(
         (TypeDesc::Tuple(items), Value::Tuple(values)) => {
             write_tuple_values(items, values, writer)?;
         }
+        (TypeDesc::Variant(variants), Value::Variant { index, value }) => {
+            let discr = *index;
+            let variant = variants
+                .get(usize::from(discr))
+                .ok_or(Error::InvalidValue("Variant discriminator out of range"))?;
+            writer.write_all(&[discr])?;
+            write_value(variant, value, writer)?;
+        }
+        (TypeDesc::Variant(_), Value::VariantNull) => {
+            writer.write_all(&[u8::MAX])?;
+        }
+        (TypeDesc::Nothing, Value::Nothing) => {}
         (TypeDesc::Nested(items), Value::Array(values)) => {
             write_uvarint(values.len() as u64, writer)?;
             for value in values {

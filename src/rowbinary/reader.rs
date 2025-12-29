@@ -150,6 +150,11 @@ impl<R: Read> RowBinaryReader<R> {
             return Ok(None);
         }
 
+        if matches!(schema.fields()[0].ty, crate::types::TypeDesc::Nothing) {
+            return Err(Error::UnsupportedCombination(
+                "RowBinary cannot stream Nothing as the leading column".into(),
+            ));
+        }
         let mut row = Vec::with_capacity(schema.len());
         for (index, field) in schema.fields().iter().enumerate() {
             let value = if index == 0 {
@@ -183,6 +188,11 @@ impl<R: Read> RowBinaryReader<R> {
             return Ok(false);
         }
 
+        if matches!(schema.fields()[0].ty, crate::types::TypeDesc::Nothing) {
+            return Err(Error::UnsupportedCombination(
+                "RowBinary cannot stream Nothing as the leading column".into(),
+            ));
+        }
         row.clear();
         row.reserve(schema.len());
         for (index, field) in schema.fields().iter().enumerate() {

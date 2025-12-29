@@ -172,7 +172,7 @@ fn dynamic_multi_row_writing() {
 #[test]
 fn dynamic_rejects_unsupported_type_encoding() {
     let schema = Schema::from_type_strings(&[("value", "Dynamic")]).unwrap();
-    let payload = [0x31_u8];
+    let payload = [0x2C_u8];
     let mut reader = RowBinaryReader::with_schema(&payload[..], RowBinaryFormat::RowBinary, schema);
     let err = reader.read_row().unwrap_err();
     assert!(matches!(err, Error::UnsupportedType(_)));

@@ -58,15 +58,18 @@ enum BinaryTypeIndex {
     Map = 0x27,
     Ipv4 = 0x28,
     Ipv6 = 0x29,
+    Variant = 0x2A,
     Dynamic = 0x2B,
     Bool = 0x2D,
     Nested = 0x2F,
     Json = 0x30,
+    BFloat16 = 0x31,
 }
 
 #[allow(clippy::too_many_lines)]
 pub(crate) fn encode_type_binary<W: Write + ?Sized>(ty: &TypeDesc, writer: &mut W) -> Result<()> {
     match ty {
+        TypeDesc::Nothing => Err(Error::UnsupportedType("Nothing".into())),
         TypeDesc::UInt8 => write_tag(BinaryTypeIndex::UInt8, writer),
         TypeDesc::Bool => write_tag(BinaryTypeIndex::Bool, writer),
         TypeDesc::UInt16 => write_tag(BinaryTypeIndex::UInt16, writer),
@@ -82,6 +85,8 @@ pub(crate) fn encode_type_binary<W: Write + ?Sized>(ty: &TypeDesc, writer: &mut 
         TypeDesc::Int256 => write_tag(BinaryTypeIndex::Int256, writer),
         TypeDesc::Float32 => write_tag(BinaryTypeIndex::Float32, writer),
         TypeDesc::Float64 => write_tag(BinaryTypeIndex::Float64, writer),
+        TypeDesc::Float16 => Err(Error::UnsupportedType("Float16".into())),
+        TypeDesc::BFloat16 => write_tag(BinaryTypeIndex::BFloat16, writer),
         TypeDesc::Date => write_tag(BinaryTypeIndex::Date, writer),
         TypeDesc::Date32 => write_tag(BinaryTypeIndex::Date32, writer),
         TypeDesc::DateTime { timezone } => match timezone {
@@ -189,6 +194,7 @@ pub(crate) fn encode_type_binary<W: Write + ?Sized>(ty: &TypeDesc, writer: &mut 
         }
         TypeDesc::Tuple(items) => encode_tuple(items, writer),
         TypeDesc::Nested(items) => encode_nested(items, writer),
+        TypeDesc::Variant(items) => encode_variant(items, writer),
         TypeDesc::Nullable(inner) => {
             write_tag(BinaryTypeIndex::Nullable, writer)?;
             encode_type_binary(inner, writer)
@@ -295,6 +301,7 @@ fn decode_type_binary_inner_with_tag<R: Read + ?Sized>(
         x if x == BinaryTypeIndex::Int256 as u8 => Ok(Some(TypeDesc::Int256)),
         x if x == BinaryTypeIndex::Float32 as u8 => Ok(Some(TypeDesc::Float32)),
         x if x == BinaryTypeIndex::Float64 as u8 => Ok(Some(TypeDesc::Float64)),
+        x if x == BinaryTypeIndex::BFloat16 as u8 => Ok(Some(TypeDesc::BFloat16)),
         x if x == BinaryTypeIndex::Date as u8 => Ok(Some(TypeDesc::Date)),
         x if x == BinaryTypeIndex::Date32 as u8 => Ok(Some(TypeDesc::Date32)),
         x if x == BinaryTypeIndex::DateTimeUTC as u8 => {
@@ -400,6 +407,25 @@ fn decode_type_binary_inner_with_tag<R: Read + ?Sized>(
         x if x == BinaryTypeIndex::Uuid as u8 => Ok(Some(TypeDesc::Uuid)),
         x if x == BinaryTypeIndex::Ipv4 as u8 => Ok(Some(TypeDesc::Ipv4)),
         x if x == BinaryTypeIndex::Ipv6 as u8 => Ok(Some(TypeDesc::Ipv6)),
+        x if x == BinaryTypeIndex::Variant as u8 => {
+            let count = read_required_uvarint(reader, "missing Variant size")?;
+            let count =
+                usize::try_from(count).map_err(|_| Error::Overflow("Variant size too large"))?;
+            if count == 0 {
+                return Err(Error::InvalidValue("Variant expects at least one type"));
+            }
+            if count > u8::MAX as usize {
+                return Err(Error::InvalidValue("Variant size too large"));
+            }
+            let mut items = Vec::with_capacity(count);
+            for _ in 0..count {
+                let ty = decode_type_binary_inner(reader, complexity)?.ok_or_else(|| {
+                    Error::UnsupportedCombination("Variant cannot contain Nothing".into())
+                })?;
+                items.push(ty);
+            }
+            Ok(Some(TypeDesc::Variant(canonicalize_variant_types(items)?)))
+        }
         x if x == BinaryTypeIndex::Array as u8 => {
             let inner = decode_type_binary_inner(reader, complexity)?.ok_or_else(|| {
                 Error::UnsupportedCombination("Array(Nothing) is unsupported".into())
@@ -635,6 +661,55 @@ fn encode_nested<W: Write + ?Sized>(items: &[TupleItem], writer: &mut W) -> Resu
     Ok(())
 }
 
+fn encode_variant<W: Write + ?Sized>(items: &[TypeDesc], writer: &mut W) -> Result<()> {
+    let canonical = canonicalize_variant_types(items.to_vec())?;
+    write_tag(BinaryTypeIndex::Variant, writer)?;
+    write_uvarint(canonical.len() as u64, writer)?;
+    for item in canonical {
+        encode_type_binary(&item, writer)?;
+    }
+    Ok(())
+}
+
+fn canonicalize_variant_types(items: Vec<TypeDesc>) -> Result<Vec<TypeDesc>> {
+    use std::collections::BTreeMap;
+
+    let mut deduped = BTreeMap::new();
+    for item in items {
+        if matches!(item, TypeDesc::Variant(_)) {
+            return Err(Error::UnsupportedCombination(
+                "Variant cannot contain Variant".into(),
+            ));
+        }
+        if matches!(item, TypeDesc::Dynamic { .. }) {
+            return Err(Error::UnsupportedCombination(
+                "Variant cannot contain Dynamic".into(),
+            ));
+        }
+        if matches!(item, TypeDesc::Nullable(_))
+            || matches!(item, TypeDesc::LowCardinality(ref inner) if matches!(inner.as_ref(), TypeDesc::Nullable(_)))
+        {
+            return Err(Error::UnsupportedCombination(
+                "Variant cannot contain Nullable or LowCardinality(Nullable)".into(),
+            ));
+        }
+        if matches!(item, TypeDesc::Nothing) {
+            continue;
+        }
+        deduped.insert(item.type_name(), item);
+    }
+
+    if deduped.is_empty() {
+        return Err(Error::InvalidValue("Variant expects at least one type"));
+    }
+
+    if deduped.len() > u8::MAX as usize {
+        return Err(Error::InvalidValue("Variant has too many nested types"));
+    }
+
+    Ok(deduped.into_values().collect())
+}
+
 fn encode_decimal_with_scale<W: Write + ?Sized>(
     tag: BinaryTypeIndex,
     precision: u8,
@@ -702,6 +777,7 @@ mod tests {
             TypeDesc::UInt64,
             TypeDesc::Float32,
             TypeDesc::Float64,
+            TypeDesc::BFloat16,
             TypeDesc::String,
             TypeDesc::FixedString { length: 8 },
             TypeDesc::Date,
@@ -794,6 +870,7 @@ mod tests {
             TypeDesc::Tuple(tuple_items.clone()),
             TypeDesc::Tuple(named_tuple_items.clone()),
             TypeDesc::Nested(named_tuple_items),
+            TypeDesc::Variant(vec![TypeDesc::String, TypeDesc::UInt8]),
             TypeDesc::Json {
                 max_dynamic_paths: 10,
                 max_dynamic_types: 4,

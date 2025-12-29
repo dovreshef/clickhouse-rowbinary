@@ -9,6 +9,8 @@ use crate::types::TypeDesc;
 /// Runtime value used for `RowBinary` read/write APIs.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
+    /// Empty value for Nothing type.
+    Nothing,
     /// Unsigned 8-bit integer.
     UInt8(u8),
     /// Boolean stored as 8-bit integer.
@@ -39,6 +41,10 @@ pub enum Value {
     Float32(f32),
     /// 64-bit floating point number.
     Float64(f64),
+    /// 16-bit floating point number.
+    Float16(f32),
+    /// 16-bit bfloat number.
+    BFloat16(f32),
     /// Variable-length string (binary safe).
     String(Vec<u8>),
     /// Fixed-width string (binary safe).
@@ -77,6 +83,15 @@ pub enum Value {
     Map(Vec<(Value, Value)>),
     /// Tuple represented as ordered values.
     Tuple(Vec<Value>),
+    /// Variant value with a discriminator.
+    Variant {
+        /// Discriminator index within the Variant type list.
+        index: u8,
+        /// Value payload for the variant.
+        value: Box<Value>,
+    },
+    /// Variant null (discriminator 255).
+    VariantNull,
     /// JSON object represented as ordered path/value pairs.
     JsonObject(Vec<(String, Value)>),
     /// Dynamic value with an explicit runtime type.
@@ -95,6 +110,7 @@ impl Value {
     #[must_use]
     pub fn type_name(&self) -> &'static str {
         match self {
+            Value::Nothing => "Nothing",
             Value::UInt8(_) => "UInt8",
             Value::Bool(_) => "Bool",
             Value::UInt16(_) => "UInt16",
@@ -110,6 +126,8 @@ impl Value {
             Value::Int256(_) => "Int256",
             Value::Float32(_) => "Float32",
             Value::Float64(_) => "Float64",
+            Value::Float16(_) => "Float16",
+            Value::BFloat16(_) => "BFloat16",
             Value::String(_) => "String",
             Value::FixedString(_) => "FixedString",
             Value::Date(_) => "Date",
@@ -129,6 +147,7 @@ impl Value {
             Value::Array(_) => "Array",
             Value::Map(_) => "Map",
             Value::Tuple(_) => "Tuple",
+            Value::Variant { .. } | Value::VariantNull => "Variant",
             Value::JsonObject(_) => "JSON",
             Value::Dynamic { .. } | Value::DynamicNull => "Dynamic",
         }
