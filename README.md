@@ -1,19 +1,59 @@
-# ClickHouse RowBinary Toolkit (Rust)
+# clickhouse-rowbinary
 
-`clickhouse-rowbinary` is a small Rust library for reading and writing ClickHouse
-RowBinary formats: `RowBinary`, `RowBinaryWithNames`, and
-`RowBinaryWithNamesAndTypes`. It is designed for streaming ingestion and
-validation against a live ClickHouse server.
+Fast, streaming encoder/decoder for ClickHouse [RowBinary](https://clickhouse.com/docs/en/interfaces/formats#rowbinary) format.
+
+Available as both a **Rust crate** and **Python package** (with Rust-powered performance).
 
 ## Features
 
-- Read/write `RowBinary`, `RowBinaryWithNames`, `RowBinaryWithNamesAndTypes`.
-- Streaming row APIs for incremental reads/writes.
-- Buffered row view with boundary tracking for retryable batching.
-- Strict schema validation with structured errors (no panics in library code).
-- Integration tests for read/write across all formats, single/multi row cases.
+- **Full type support**: All ClickHouse types including Decimal, DateTime64, UUID, IPv4/IPv6, Nullable, Array, Map, Tuple, LowCardinality, Nested, JSON, and Dynamic
+- **Three format variants**: `RowBinary`, `RowBinaryWithNames`, `RowBinaryWithNamesAndTypes`
+- **Streaming APIs**: Read/write rows incrementally without loading entire datasets into memory
+- **Schema validation**: Strict type checking with clear error messages
+- **Zero-copy where possible**: Efficient memory usage for high-throughput scenarios
 
-## Usage
+## Installation
+
+### Python
+
+```bash
+pip install clickhouse-rowbinary
+```
+
+### Rust
+
+```toml
+[dependencies]
+clickhouse_rowbinary = "0.1"
+```
+
+## Quick Start
+
+### Python
+
+```python
+from clickhouse_rowbinary import Schema, RowBinaryWriter, RowBinaryReader
+
+# Define schema
+schema = Schema.from_clickhouse([
+    ("id", "UInt32"),
+    ("name", "String"),
+    ("score", "Float64"),
+])
+
+# Write rows
+writer = RowBinaryWriter(schema)
+writer.write_row({"id": 1, "name": b"Alice", "score": 95.5})
+writer.write_row({"id": 2, "name": b"Bob", "score": 87.0})
+data = writer.take()
+
+# Read rows back
+reader = RowBinaryReader(data, schema)
+for row in reader:
+    print(f"{row['name'].decode()}: {row['score']}")
+```
+
+### Rust
 
 ```rust
 use clickhouse_rowbinary::{RowBinaryFormat, RowBinaryValueWriter, Schema, Value};
@@ -21,60 +61,93 @@ use clickhouse_rowbinary::{RowBinaryFormat, RowBinaryValueWriter, Schema, Value}
 let schema = Schema::from_type_strings(&[
     ("id", "UInt32"),
     ("name", "String"),
+    ("score", "Float64"),
 ])?;
-let mut writer = RowBinaryValueWriter::new(Vec::new(), RowBinaryFormat::RowBinary, schema);
-writer.write_row(&[Value::UInt32(1), Value::String(b"alpha".to_vec())])?;
+
+let mut writer = RowBinaryValueWriter::new(
+    Vec::new(),
+    RowBinaryFormat::RowBinary,
+    schema.clone(),
+);
+writer.write_row(&[
+    Value::UInt32(1),
+    Value::String(b"Alice".to_vec()),
+    Value::Float64(95.5),
+])?;
+
 let payload = writer.into_inner();
 ```
 
-For `RowBinaryWithNames` and `RowBinaryWithNamesAndTypes`, the header is written
-automatically from the schema.
-
-See `USAGE.md` for end-to-end streaming examples (seekable Zstd files, batching,
-row seeking, and multi-threaded producers).
-
 ## Supported Types
 
-Currently supported:
-- Integers (including 128/256-bit), `Bool`, floats, `String`, `FixedString`.
-- `Decimal`, `Decimal32`, `Decimal64`, `Decimal128`, `Decimal256`.
-- `Enum8`, `Enum16`.
-- `Date`, `Date32`, `DateTime`, `DateTime64`.
-- `UUID`, `IPv4`, `IPv6`.
-- `Nullable(T)`, `Array(T)`, `Map(K, V)`, `LowCardinality(T)`.
-- `Tuple(...)`, `Nested(...)`, `Dynamic`, `JSON`.
+| ClickHouse Type | Python Type | Rust Type |
+|-----------------|-------------|-----------|
+| `UInt8`..`UInt256` | `int` | `Value::UInt8`..`Value::UInt256` |
+| `Int8`..`Int256` | `int` | `Value::Int8`..`Value::Int256` |
+| `Float32`, `Float64` | `float` | `Value::Float32`, `Value::Float64` |
+| `Bool` | `bool` | `Value::Bool` |
+| `String` | `bytes` or `str` | `Value::String` |
+| `FixedString(N)` | `bytes` | `Value::FixedString` |
+| `Date`, `Date32` | `datetime.date` | `Value::Date`, `Value::Date32` |
+| `DateTime` | `datetime.datetime` | `Value::DateTime` |
+| `DateTime64(p)` | `datetime.datetime` | `Value::DateTime64` |
+| `UUID` | `uuid.UUID` | `Value::Uuid` |
+| `IPv4`, `IPv6` | `ipaddress.*` | `Value::IPv4`, `Value::IPv6` |
+| `Decimal*` | `decimal.Decimal` | `Value::Decimal*` |
+| `Enum8`, `Enum16` | `str` | `Value::Enum8`, `Value::Enum16` |
+| `Nullable(T)` | `T \| None` | `Value::Nullable` |
+| `Array(T)` | `list` | `Value::Array` |
+| `Map(K, V)` | `dict` | `Value::Map` |
+| `Tuple(...)` | `tuple` | `Value::Tuple` |
+| `LowCardinality(T)` | same as `T` | same as `T` |
+| `JSON` | `dict` | `Value::Json` |
+| `Dynamic` | varies | `Value::Dynamic` |
 
-Validation mirrors ClickHouse rules where applicable:
-- `LowCardinality` is only allowed for types ClickHouse accepts (numbers, string
-  types, `Date`, `Date32`, `DateTime`, `UUID`, `IPv4`, `IPv6`, and `Nullable` of
-  those). `LowCardinality(DateTime64)` and nested low-cardinality are rejected.
-- `Map` keys cannot be `Nullable` or `LowCardinality(Nullable(...))`.
+## Format Variants
 
-JSON v3 RowBinary encodings are supported (binary path/value form).
+- **`RowBinary`**: Raw row data only (most compact, requires schema)
+- **`RowBinaryWithNames`**: Includes column names header
+- **`RowBinaryWithNamesAndTypes`**: Self-describing with names and types
 
-Dynamic values embed the concrete type inline using ClickHouse binary type
-encoding; use `Value::Dynamic`/`Value::DynamicNull` when writing.
+```python
+from clickhouse_rowbinary import Format
 
-## Codec Notes
+# For self-describing data
+writer = RowBinaryWriter(schema, format=Format.RowBinaryWithNamesAndTypes)
+writer.write_header()
+writer.write_rows(rows)
+```
 
-RowBinary encodes values independent of storage codecs. A `String CODEC(ZSTD)`
-column still uses the same RowBinary encoding; an integration test verifies
-roundtrip when the server supports the codec.
+## Documentation
 
-## Decimal Notes
+- **Python**: See the [Python package documentation](python/README.md) for detailed Python API reference
+- **Rust**: See [USAGE.md](USAGE.md) for advanced Rust patterns (streaming, batching, Zstd compression)
+- **API Reference**: [docs.rs/clickhouse_rowbinary](https://docs.rs/clickhouse_rowbinary)
 
-- `RowBinaryWithNamesAndTypes` headers use canonical `Decimal(precision, scale)`
-  names, even if the schema was declared with `Decimal32/64/128/256`.
-- When validating inserts via `FORMAT JSONEachRow`, ClickHouse emits decimals
-  as JSON numbers (not strings) and may trim trailing zeroes (for example,
-  `-56.00` becomes `-56`).
+## Error Handling
+
+Both implementations provide specific exception/error types:
+
+| Python Exception | Rust Error | When Raised |
+|------------------|------------|-------------|
+| `SchemaError` | `Error::UnsupportedType` | Invalid type string |
+| `ValidationError` | `Error::TypeMismatch` | Data doesn't match schema |
+| `EncodingError` | `Error::Overflow` | Value out of range |
+| `DecodingError` | `Error::Io` | Corrupted/truncated data |
 
 ## Running Tests
 
 ```bash
+# Rust tests
+cargo test --lib
+
+# Python tests
+uv run pytest tests/python
+
+# Full validation (requires ClickHouse)
 ./validate.sh
 ```
 
-The script runs format, build, clippy, unit tests, and integration tests against
-a ClickHouse instance configured via `CLICKHOUSE_DSN`. Integration tests use
-`DROP TABLE IF EXISTS` at the start to make debugging easier.
+## License
+
+MIT OR Apache-2.0

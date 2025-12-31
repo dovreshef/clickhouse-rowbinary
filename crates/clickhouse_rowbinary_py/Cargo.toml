@@ -1,0 +1,41 @@
+[package]
+name = "clickhouse_rowbinary_py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings for clickhouse_rowbinary"
+
+[lib]
+name = "_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+clickhouse_rowbinary = { workspace = true }
+pyo3 = { workspace = true }
+num-bigint = { workspace = true }
+uuid = { workspace = true }
+
+# PyO3-specific lint configuration - inherit workspace but override some rules
+[lints.clippy]
+# Inherit workspace deny rules
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -2 }
+# PyO3-specific allows - these conflict with PyO3 conventions
+unused_self = "allow"
+unnecessary_wraps = "allow"
+doc_markdown = "allow"
+needless_pass_by_value = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# Date/time conversions require intentional casts
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+# Format enum matches ClickHouse naming convention
+enum_variant_names = "allow"
+# Float types need separate arms for proper type handling
+match_same_arms = "allow"

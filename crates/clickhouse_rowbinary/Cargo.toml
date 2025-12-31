@@ -1,0 +1,37 @@
+[package]
+name = "clickhouse_rowbinary"
+version = "0.1.0"
+edition = "2024"
+authors = ["Dov Reshef <reshef.dov@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "RowBinary encoder/decoder for ClickHouse"
+readme = "../../README.md"
+keywords = ["clickhouse", "rowbinary", "serialization", "encoding", "database"]
+categories = ["encoding", "database", "parser-implementations"]
+documentation = "https://docs.rs/clickhouse_rowbinary"
+repository = "https://github.com/dovreshef/clickhouse-rowbinary"
+
+[dependencies]
+thiserror = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+half = { workspace = true }
+zeekstd = { workspace = true }
+
+[dev-dependencies]
+serde = { workspace = true }
+rand = { workspace = true }
+ureq = { workspace = true }
+serde_json = { workspace = true }
+urlencoding = { workspace = true }
+serial_test = { workspace = true }
+zstd = { workspace = true }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "integration"
+path = "../../tests/rust/main.rs"

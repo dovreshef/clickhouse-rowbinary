@@ -1,13 +1,31 @@
 # Usage Examples
 
-This file shows end-to-end patterns for streaming RowBinary payloads.
+This document covers advanced usage patterns for both Rust and Python.
+
+## Table of Contents
+
+- [Rust Examples](#rust-examples)
+  - [Write a Zstd-compressed file](#write-a-seekable-zstd-rowbinarywithnames-and-types-file)
+  - [Read and batch for HTTP insert](#read-a-seekable-zstd-file-and-post-in-batches)
+  - [Dynamic values](#dynamic-values)
+  - [Nested columns](#writing-nested-columns)
+  - [Multi-threaded production](#combine-per-thread-rowbinary-chunks-into-one-zstd-file)
+- [Python Examples](#python-examples)
+  - [Batch inserts to ClickHouse](#batch-inserts-to-clickhouse)
+  - [Reading from files](#reading-from-files)
+  - [Complex types](#complex-types)
+  - [Generator-based writing](#memory-efficient-writing-with-generators)
+
+---
+
+## Rust Examples
 
 For convenience, `RowBinaryFileReader` and `RowBinaryFileWriter` are type
 aliases for buffered file-backed readers/writers (`BufReader<File>` and
 `BufWriter<File>`). `RowBinaryValueWriter::new_buffered` wraps any writer in
 `BufWriter` when you want buffering for small row payloads.
 
-## Write a seekable Zstd RowBinaryWithNamesAndTypes file
+### Write a seekable Zstd RowBinaryWithNamesAndTypes file
 
 ```rust
 use std::fs::File;
@@ -37,7 +55,7 @@ for row in &rows {
 writer.finish()?;
 ```
 
-## Read a seekable Zstd RowBinaryWithNamesAndTypes file and post in batches
+### Read a seekable Zstd file and post in batches
 
 The `RowBinaryWithNamesAndTypes` header is required for each INSERT. For best
 performance, stream row bytes directly into the batch writer and only rebuild
@@ -102,7 +120,7 @@ For tighter control over allocations, keep a reusable `Vec<u8>` per batch,
 If your HTTP client supports streaming request bodies, you can write directly
 into the request stream instead of buffering the entire batch.
 
-## Dynamic values
+### Dynamic values
 
 `Dynamic` values encode the concrete type before each value using ClickHouse's
 binary type encoding. Use `Value::Dynamic` with an explicit `TypeDesc`, or
@@ -133,7 +151,7 @@ let payload = writer.into_inner();
 // INSERT INTO table FORMAT RowBinary
 ```
 
-## Writing Nested columns
+### Writing Nested columns
 
 ClickHouse expands `Nested` columns into separate `Array(T)` columns on write
 (`n.a`, `n.b`, ...). The writer handles this for you: supply a `Nested` schema
@@ -155,7 +173,7 @@ let payload = writer.into_inner();
 // INSERT INTO table FORMAT RowBinary
 ```
 
-## Combine per-thread RowBinary chunks into one ZSTD file
+### Combine per-thread RowBinary chunks into one ZSTD file
 
 Workers can emit **plain RowBinary** (no header) and a single aggregator writes
 one `RowBinaryWithNamesAndTypes` header before appending worker chunks.
@@ -198,4 +216,232 @@ encoder.write_all(&header_writer.into_inner())?;
 encoder.write_all(&chunk1)?;
 encoder.write_all(&chunk2)?;
 encoder.finish()?;
+```
+
+---
+
+## Python Examples
+
+### Batch inserts to ClickHouse
+
+Efficiently insert large datasets by batching rows and using the HTTP interface:
+
+```python
+import httpx
+from clickhouse_rowbinary import Schema, RowBinaryWriter, Format
+
+schema = Schema.from_clickhouse([
+    ("id", "UInt64"),
+    ("name", "String"),
+    ("timestamp", "DateTime"),
+])
+
+def insert_batch(rows: list, client: httpx.Client, table: str):
+    """Insert a batch of rows to ClickHouse."""
+    writer = RowBinaryWriter(schema, format=Format.RowBinaryWithNamesAndTypes)
+    writer.write_header()
+    writer.write_rows(rows)
+    data = writer.take()
+
+    response = client.post(
+        "http://localhost:8123/",
+        params={"query": f"INSERT INTO {table} FORMAT RowBinaryWithNamesAndTypes"},
+        content=data,
+    )
+    response.raise_for_status()
+
+# Usage with batching
+BATCH_SIZE = 10_000
+batch = []
+client = httpx.Client()
+
+for row in generate_rows():
+    batch.append(row)
+    if len(batch) >= BATCH_SIZE:
+        insert_batch(batch, client, "my_table")
+        batch.clear()
+
+if batch:
+    insert_batch(batch, client, "my_table")
+```
+
+### Reading from files
+
+Read RowBinary data directly from files for efficient streaming:
+
+```python
+from clickhouse_rowbinary import Schema, RowBinaryReader
+
+schema = Schema.from_clickhouse([
+    ("id", "UInt32"),
+    ("name", "String"),
+    ("value", "Float64"),
+])
+
+# Stream from file (memory-efficient for large files)
+reader = RowBinaryReader.from_file("data.bin", schema)
+for row in reader:
+    process_row(row)
+
+# Or read all at once (releases GIL, good for parallel processing)
+reader = RowBinaryReader.from_file("data.bin", schema)
+rows = reader.read_all()
+# Now process rows in parallel if needed
+```
+
+### Complex types
+
+Working with nested, nullable, and composite types:
+
+```python
+from datetime import datetime, date
+from decimal import Decimal
+from uuid import UUID
+from ipaddress import IPv4Address
+from clickhouse_rowbinary import Schema, RowBinaryWriter, RowBinaryReader
+
+schema = Schema.from_clickhouse([
+    # Nullable types
+    ("optional_value", "Nullable(Int32)"),
+
+    # Arrays
+    ("tags", "Array(String)"),
+
+    # Maps
+    ("metadata", "Map(String, Int64)"),
+
+    # Nested tuples
+    ("point", "Tuple(Float64, Float64)"),
+
+    # Date/time types
+    ("created_at", "DateTime64(3)"),
+    ("birth_date", "Date"),
+
+    # Other scalar types
+    ("id", "UUID"),
+    ("ip", "IPv4"),
+    ("amount", "Decimal64(2)"),
+])
+
+writer = RowBinaryWriter(schema)
+writer.write_row({
+    "optional_value": None,  # Nullable - can be None
+    "tags": [b"python", b"clickhouse", b"fast"],
+    "metadata": {b"views": 1000, b"likes": 42},
+    "point": (37.7749, -122.4194),
+    "created_at": datetime.now(),
+    "birth_date": date(1990, 5, 15),
+    "id": UUID("550e8400-e29b-41d4-a716-446655440000"),
+    "ip": IPv4Address("192.168.1.1"),
+    "amount": Decimal("99.99"),
+})
+
+data = writer.take()
+
+# Read back with string mode for UTF-8 strings
+reader = RowBinaryReader(data, schema, string_mode="str")
+row = reader.read_row()
+print(row["tags"])  # ['python', 'clickhouse', 'fast']
+```
+
+### Memory-efficient writing with generators
+
+Process large datasets without loading everything into memory:
+
+```python
+from clickhouse_rowbinary import Schema, RowBinaryWriter
+
+schema = Schema.from_clickhouse([
+    ("id", "UInt64"),
+    ("data", "String"),
+])
+
+def generate_rows(count: int):
+    """Generate rows on-demand."""
+    for i in range(count):
+        yield {"id": i, "data": f"row_{i}".encode()}
+
+# Write 1 million rows without storing them all in memory
+writer = RowBinaryWriter(schema)
+writer.write_rows(generate_rows(1_000_000))
+data = writer.take()
+
+print(f"Wrote {writer.rows_written} rows, {len(data)} bytes")
+```
+
+### Enum handling
+
+Enums are written as strings (variant names) and read back as strings:
+
+```python
+from clickhouse_rowbinary import Schema, RowBinaryWriter, RowBinaryReader
+
+schema = Schema.from_clickhouse([
+    ("status", "Enum8('pending' = 0, 'active' = 1, 'completed' = 2)"),
+])
+
+writer = RowBinaryWriter(schema)
+writer.write_row({"status": "active"})
+writer.write_row({"status": "completed"})
+data = writer.take()
+
+reader = RowBinaryReader(data, schema)
+for row in reader:
+    print(row["status"])  # "active", "completed"
+```
+
+### Working with LowCardinality
+
+LowCardinality is transparent in the Python API - use the same types:
+
+```python
+from clickhouse_rowbinary import Schema, RowBinaryWriter
+
+# LowCardinality wraps the inner type
+schema = Schema.from_clickhouse([
+    ("country", "LowCardinality(String)"),
+    ("status", "LowCardinality(Nullable(String))"),
+])
+
+writer = RowBinaryWriter(schema)
+writer.write_row({"country": b"US", "status": b"active"})
+writer.write_row({"country": b"UK", "status": None})  # Nullable allows None
+```
+
+### Error recovery pattern
+
+Handle errors gracefully when processing large datasets:
+
+```python
+from clickhouse_rowbinary import (
+    Schema, RowBinaryWriter, RowBinaryReader,
+    ValidationError, EncodingError, DecodingError
+)
+
+schema = Schema.from_clickhouse([("id", "UInt32"), ("value", "Float64")])
+
+def safe_write_rows(rows, schema):
+    """Write rows, skipping invalid ones."""
+    writer = RowBinaryWriter(schema)
+    skipped = 0
+
+    for row in rows:
+        try:
+            writer.write_row(row)
+        except (ValidationError, EncodingError) as e:
+            print(f"Skipping invalid row: {e}")
+            skipped += 1
+            continue
+
+    print(f"Wrote {writer.rows_written} rows, skipped {skipped}")
+    return writer.take()
+
+def safe_read_rows(data, schema):
+    """Read rows, handling corrupted data."""
+    try:
+        reader = RowBinaryReader(data, schema)
+        return reader.read_all()
+    except DecodingError as e:
+        print(f"Data corrupted: {e}")
+        return []
 ```

@@ -17,3 +17,21 @@
 plan.md
 progress.md
 AGENTS.md
+
+.claude
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+
+# Virtual environment
+venv/
+.venv/
+
+# Editor/IDE-specific files
+.vscode/
+.idea/
+
+*.so

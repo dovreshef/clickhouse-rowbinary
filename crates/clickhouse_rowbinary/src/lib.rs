@@ -12,5 +12,5 @@ pub use rowbinary::{
     Field, Row, RowBinaryFileReader, RowBinaryFileWriter, RowBinaryFormat, RowBinaryHeader,
     RowBinaryReader, RowBinaryValueReader, RowBinaryValueWriter, RowBinaryWriter, Schema,
 };
-pub use types::{TypeDesc, parse_type_desc};
+pub use types::{DecimalSize, TypeDesc, parse_type_desc};
 pub use value::Value;
