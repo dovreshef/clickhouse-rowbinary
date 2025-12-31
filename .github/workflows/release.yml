@@ -114,16 +114,13 @@ jobs:
           path: dist
 
   # Build wheels for macOS (Intel and Apple Silicon)
+  # Uses macos-14 (ARM) for both, with cross-compilation for Intel
   macos:
-    runs-on: ${{ matrix.platform.runner }}
+    runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
-        platform:
-          - runner: macos-13      # Intel
-            target: x86_64
-          - runner: macos-14      # Apple Silicon (M1/M2)
-            target: aarch64
+        target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -135,13 +132,13 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.platform.target }}
+          target: ${{ matrix.target }}-apple-darwin
           args: --release --out dist --interpreter ${{ env.PYTHON_VERSIONS }}
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-macos-${{ matrix.platform.target }}
+          name: wheels-macos-${{ matrix.target }}
           path: dist
 
   # Build source distribution
