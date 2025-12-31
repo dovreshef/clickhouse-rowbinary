@@ -159,7 +159,7 @@ __all__ = [
     "SUPPORTED_TYPES",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Type mapping for discoverability
 SUPPORTED_TYPES: dict[str, str] = {
