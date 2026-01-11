@@ -120,10 +120,7 @@ impl SeekableReader {
     /// Returns the current row index.
     #[getter]
     fn current_index(&self) -> usize {
-        // The reader tracks this internally but doesn't expose it publicly
-        // For now, we'll need to track it ourselves or update the Rust API
-        // This is a placeholder - actual implementation depends on Rust API
-        0 // TODO: Expose current_row from Rust reader
+        self.reader.current_row_index()
     }
 
     /// Seeks to an absolute row index.
@@ -174,15 +171,17 @@ impl SeekableReader {
 
     /// Reads and decodes the current row.
     ///
-    /// Note: This does NOT advance the position. Use `seek_relative(1)` to
-    /// move to the next row.
+    /// Args:
+    ///     advance: If True (default), advance to the next row after reading.
+    ///         If False, the position remains unchanged.
     ///
     /// Returns:
     ///     Row | None: The decoded row, or None if at end of file.
     ///
     /// Raises:
     ///     DecodingError: If decoding fails.
-    fn read_current(&mut self, _py: Python<'_>) -> PyResult<Option<Row>> {
+    #[pyo3(signature = (advance = true))]
+    fn read_current(&mut self, py: Python<'_>, advance: bool) -> PyResult<Option<Row>> {
         let Some(bytes) = self.reader.current_row().map_err(to_py_err)? else {
             return Ok(None);
         };
@@ -196,19 +195,27 @@ impl SeekableReader {
         )
         .map_err(to_py_err)?;
 
-        match value_reader.read_row().map_err(to_py_err)? {
-            Some(values) => Ok(Some(Row {
+        let row = match value_reader.read_row().map_err(to_py_err)? {
+            Some(values) => Some(Row {
                 schema: Arc::clone(&self.schema),
                 values,
                 string_mode: self.string_mode,
-            })),
-            None => Ok(None),
+            }),
+            None => None,
+        };
+
+        // Advance to next row if requested and we got a row
+        if advance && row.is_some() {
+            // Release GIL during seek
+            py.allow_threads(|| self.reader.seek_relative(1)).ok();
         }
+
+        Ok(row)
     }
 
     /// Reads the next n rows as decoded Row objects.
     ///
-    /// This is a convenience method that seeks forward after each read.
+    /// This method reads and advances through `count` rows.
     ///
     /// Args:
     ///     count: Maximum number of rows to read.
@@ -222,14 +229,9 @@ impl SeekableReader {
     fn read_rows(&mut self, py: Python<'_>, count: usize) -> PyResult<Vec<Row>> {
         let mut rows = Vec::with_capacity(count);
         for _ in 0..count {
-            match self.read_current(py)? {
-                Some(row) => {
-                    rows.push(row);
-                    // Move to next row
-                    if self.reader.seek_relative(1).is_err() {
-                        break; // EOF or error
-                    }
-                }
+            // read_current(advance=True) advances automatically
+            match self.read_current(py, true)? {
+                Some(row) => rows.push(row),
                 None => break,
             }
         }
@@ -243,12 +245,8 @@ impl SeekableReader {
 
     /// Iterator next - reads current and advances.
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Row>> {
-        let row = self.read_current(py)?;
-        if row.is_some() {
-            // Advance to next row (ignore error at EOF)
-            let _ = self.reader.seek_relative(1);
-        }
-        Ok(row)
+        // read_current(advance=True) handles advancing automatically
+        self.read_current(py, true)
     }
 
     /// Context manager entry.

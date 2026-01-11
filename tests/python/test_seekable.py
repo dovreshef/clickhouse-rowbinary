@@ -121,20 +121,20 @@ class TestSeekableReader:
     def test_seek_relative(self, simple_schema: Schema, sample_zst_file: Path) -> None:
         """Seek forward and backward."""
         with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
-            # Start at 0
-            row = reader.read_current()
+            # Start at 0, peek without advancing
+            row = reader.read_current(advance=False)
             assert row is not None
             assert row["id"] == 0
 
             # Move forward 10
             reader.seek_relative(10)
-            row = reader.read_current()
+            row = reader.read_current(advance=False)
             assert row is not None
             assert row["id"] == 10
 
             # Move backward 5
             reader.seek_relative(-5)
-            row = reader.read_current()
+            row = reader.read_current(advance=False)
             assert row is not None
             assert row["id"] == 5
 
@@ -165,6 +165,162 @@ class TestSeekableReader:
         with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
             assert len(reader.schema.columns) == 3
             assert reader.schema.names == ["id", "name", "active"]
+
+    def test_current_index(self, simple_schema: Schema, sample_zst_file: Path) -> None:
+        """current_index returns the correct row position."""
+        with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
+            # Initial position is 0
+            assert reader.current_index == 0
+
+            # After seek, position updates
+            reader.seek(50)
+            assert reader.current_index == 50
+
+            # After relative seek forward
+            reader.seek_relative(10)
+            assert reader.current_index == 60
+
+            # After relative seek backward
+            reader.seek_relative(-5)
+            assert reader.current_index == 55
+
+            # After seek_to_start
+            reader.seek_to_start()
+            assert reader.current_index == 0
+
+    def test_read_current_advance_true(
+        self, simple_schema: Schema, sample_zst_file: Path
+    ) -> None:
+        """read_current with advance=True (default) advances position."""
+        with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
+            # Read with default advance=True
+            row0 = reader.read_current()
+            assert row0 is not None
+            assert row0["id"] == 0
+            assert reader.current_index == 1  # Advanced
+
+            row1 = reader.read_current()
+            assert row1 is not None
+            assert row1["id"] == 1
+            assert reader.current_index == 2  # Advanced again
+
+    def test_read_current_advance_false(
+        self, simple_schema: Schema, sample_zst_file: Path
+    ) -> None:
+        """read_current with advance=False keeps position unchanged."""
+        with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
+            # Read with advance=False
+            row0 = reader.read_current(advance=False)
+            assert row0 is not None
+            assert row0["id"] == 0
+            assert reader.current_index == 0  # Not advanced
+
+            # Reading again returns the same row
+            row0_again = reader.read_current(advance=False)
+            assert row0_again is not None
+            assert row0_again["id"] == 0
+            assert reader.current_index == 0  # Still not advanced
+
+            # Now advance manually and read again
+            row0_final = reader.read_current(advance=True)
+            assert row0_final["id"] == 0
+            assert reader.current_index == 1  # Now advanced
+
+    def test_read_current_advance_mixed(
+        self, simple_schema: Schema, sample_zst_file: Path
+    ) -> None:
+        """Mix of advance=True and advance=False works correctly."""
+        with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
+            reader.seek(10)
+
+            # Peek at row 10
+            row = reader.read_current(advance=False)
+            assert row["id"] == 10
+            assert reader.current_index == 10
+
+            # Peek again
+            row = reader.read_current(advance=False)
+            assert row["id"] == 10
+            assert reader.current_index == 10
+
+            # Now consume
+            row = reader.read_current(advance=True)
+            assert row["id"] == 10
+            assert reader.current_index == 11
+
+            # Next read gets row 11
+            row = reader.read_current(advance=True)
+            assert row["id"] == 11
+            assert reader.current_index == 12
+
+    def test_read_current_at_end_of_file(
+        self, simple_schema: Schema, sample_zst_file: Path
+    ) -> None:
+        """read_current at end of file returns None."""
+        with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
+            # Seek to last row (99, since we have 100 rows 0-99)
+            reader.seek(99)
+            assert reader.current_index == 99
+
+            # Read last row with advance=True
+            row = reader.read_current(advance=True)
+            assert row is not None
+            assert row["id"] == 99
+
+            # Now at position 100 (past end)
+            # Reading should return None
+            row = reader.read_current(advance=True)
+            assert row is None
+
+            # Reading again should still return None
+            row = reader.read_current(advance=False)
+            assert row is None
+
+    def test_read_current_at_end_no_advance(
+        self, simple_schema: Schema, sample_zst_file: Path
+    ) -> None:
+        """read_current with advance=False at last row works correctly."""
+        with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
+            # Seek to last row
+            reader.seek(99)
+
+            # Peek at last row without advancing
+            row = reader.read_current(advance=False)
+            assert row is not None
+            assert row["id"] == 99
+            assert reader.current_index == 99
+
+            # Peek again - should still work
+            row = reader.read_current(advance=False)
+            assert row is not None
+            assert row["id"] == 99
+            assert reader.current_index == 99
+
+            # Now advance past end
+            row = reader.read_current(advance=True)
+            assert row is not None
+            assert row["id"] == 99
+
+            # Subsequent reads should return None
+            row = reader.read_current(advance=False)
+            assert row is None
+
+    def test_iteration_uses_advance(
+        self, simple_schema: Schema, sample_zst_file: Path
+    ) -> None:
+        """Iterator properly advances through all rows."""
+        with SeekableReader.open(sample_zst_file, schema=simple_schema) as reader:
+            rows = []
+            for row in reader:
+                rows.append(row["id"])
+
+            # Should have read all 100 rows
+            assert len(rows) == 100
+            assert rows == list(range(100))
+
+            # After iteration, further reads return None
+            row = reader.read_current(advance=False)
+            assert row is None
 
 
 class TestRoundtrip:

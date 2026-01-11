@@ -806,15 +806,20 @@ class SeekableReader:
     This reader supports efficient seeking to any row in a compressed file.
     Files must be created with `SeekableWriter` to include the seek table.
 
-    Important: `read_current()` does NOT advance the position. Use `seek_relative(1)`
-    to move to the next row after reading.
+    By default, `read_current()` advances to the next row after reading.
+    Pass `advance=False` to keep the position unchanged.
+
+    DateTime values are returned as timezone-aware datetime objects (UTC by default).
 
     Example:
         >>> schema = Schema.from_clickhouse([("id", "UInt64"), ("name", "String")])
         >>> with SeekableReader.open("data.rowbinary.zst", schema=schema) as reader:
         ...     # Random access
         ...     reader.seek(1000)
-        ...     row = reader.read_current()
+        ...     row = reader.read_current()  # Advances to row 1001
+        ...
+        ...     # Read without advancing
+        ...     row = reader.read_current(advance=False)  # Stays at row 1001
         ...
         ...     # Sequential iteration
         ...     reader.seek(0)
@@ -899,11 +904,12 @@ class SeekableReader:
         """
         ...
 
-    def read_current(self) -> Row | None:
+    def read_current(self, advance: bool = True) -> Row | None:
         """Read and decode the current row.
 
-        Note: This does NOT advance the position. Use `seek_relative(1)` to
-        move to the next row.
+        Args:
+            advance: If True (default), advance to the next row after reading.
+                If False, the position remains unchanged.
 
         Returns:
             The decoded row, or None if at end of file.

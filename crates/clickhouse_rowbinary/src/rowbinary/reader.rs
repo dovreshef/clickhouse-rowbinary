@@ -351,6 +351,12 @@ impl<S: Seekable> RowBinaryReader<S> {
         self.header.as_ref()
     }
 
+    /// Returns the current row index.
+    #[must_use]
+    pub fn current_row_index(&self) -> usize {
+        self.current_row
+    }
+
     /// Seeks to a specific row index.
     ///
     /// # Errors

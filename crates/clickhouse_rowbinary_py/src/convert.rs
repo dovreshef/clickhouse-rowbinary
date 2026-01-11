@@ -534,17 +534,15 @@ pub fn value_to_python(
         }
         (Value::DateTime(ts), TypeDesc::DateTime { timezone }) => {
             let datetime_cls = get_datetime_datetime(py)?;
-            let dt = datetime_cls.call_method1("fromtimestamp", (*ts as f64,))?;
-            if let Some(tz_name) = timezone {
-                let zoneinfo_cls = get_zoneinfo(py)?;
-                let tz = zoneinfo_cls.call1((tz_name,))?;
-                let kwargs = PyDict::new(py);
-                kwargs.set_item("tzinfo", tz)?;
-                let dt = dt.call_method("replace", (), Some(&kwargs))?;
-                Ok(dt.unbind())
-            } else {
-                Ok(dt.unbind())
-            }
+            let zoneinfo_cls = get_zoneinfo(py)?;
+
+            // Use specified timezone or default to UTC
+            let tz_name = timezone.as_deref().unwrap_or("UTC");
+            let tz = zoneinfo_cls.call1((tz_name,))?;
+
+            // Create timezone-aware datetime
+            let dt = datetime_cls.call_method1("fromtimestamp", (*ts as f64, &tz))?;
+            Ok(dt.unbind())
         }
         (
             Value::DateTime64(ts),
@@ -554,19 +552,18 @@ pub fn value_to_python(
             },
         ) => {
             let datetime_cls = get_datetime_datetime(py)?;
+            let zoneinfo_cls = get_zoneinfo(py)?;
+
+            // Use specified timezone or default to UTC
+            let tz_name = timezone.as_deref().unwrap_or("UTC");
+            let tz = zoneinfo_cls.call1((tz_name,))?;
+
             let multiplier = 10_i64.pow(*precision as u32);
             let seconds = *ts as f64 / multiplier as f64;
-            let dt = datetime_cls.call_method1("fromtimestamp", (seconds,))?;
-            if let Some(tz_name) = timezone {
-                let zoneinfo_cls = get_zoneinfo(py)?;
-                let tz = zoneinfo_cls.call1((tz_name,))?;
-                let kwargs = PyDict::new(py);
-                kwargs.set_item("tzinfo", tz)?;
-                let dt = dt.call_method("replace", (), Some(&kwargs))?;
-                Ok(dt.unbind())
-            } else {
-                Ok(dt.unbind())
-            }
+
+            // Create timezone-aware datetime
+            let dt = datetime_cls.call_method1("fromtimestamp", (seconds, &tz))?;
+            Ok(dt.unbind())
         }
         (Value::Uuid(uuid), _) => {
             let uuid_cls = get_uuid_uuid(py)?;

@@ -1,6 +1,6 @@
 [project]
 name = "clickhouse-rowbinary"
-version = "0.3.0"
+version = "0.4.0"
 description = "Fast ClickHouse RowBinary format encoder/decoder"
 readme = "python/README.md"
 license = { text = "MIT OR Apache-2.0" }
@@ -45,6 +45,7 @@ dev = [
     "pytest-asyncio>=1.3",
     "ruff>=0.14",
     "pyright>=1.1",
+    "tzdata>=2024.1",  # Required for zoneinfo on Windows
 ]
 
 [tool.pytest.ini_options]

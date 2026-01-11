@@ -1,9 +1,10 @@
 """Tests for type conversion between Python and ClickHouse types."""
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
+from zoneinfo import ZoneInfo
 
 import pytest
 from clickhouse_rowbinary import RowBinaryReader, RowBinaryWriter, Schema
@@ -172,12 +173,20 @@ class TestDateTimeTypes:
     """Tests for datetime type conversions."""
 
     def test_datetime(self):
-        dt = datetime(2024, 6, 15, 12, 30, 45)
+        # Use UTC-aware datetime for consistent roundtrip
+        dt = datetime(2024, 6, 15, 12, 30, 45, tzinfo=UTC)
         result = roundtrip_value("DateTime", dt)
-        assert result == dt
+        # Result should match (both in UTC)
+        assert result.year == dt.year
+        assert result.month == dt.month
+        assert result.day == dt.day
+        assert result.hour == dt.hour
+        assert result.minute == dt.minute
+        assert result.second == dt.second
 
     def test_datetime64_3(self):
-        dt = datetime(2024, 6, 15, 12, 30, 45, 123000)
+        # Use UTC-aware datetime for consistent roundtrip
+        dt = datetime(2024, 6, 15, 12, 30, 45, 123000, tzinfo=UTC)
         result = roundtrip_value("DateTime64(3)", dt)
         # Millisecond precision
         assert result.year == dt.year
@@ -188,9 +197,59 @@ class TestDateTimeTypes:
         assert result.second == dt.second
 
     def test_datetime64_6(self):
-        dt = datetime(2024, 6, 15, 12, 30, 45, 123456)
+        # Use UTC-aware datetime for consistent roundtrip
+        dt = datetime(2024, 6, 15, 12, 30, 45, 123456, tzinfo=UTC)
         result = roundtrip_value("DateTime64(6)", dt)
-        assert result == dt
+        # Compare components (both in UTC)
+        assert result.year == dt.year
+        assert result.month == dt.month
+        assert result.day == dt.day
+        assert result.hour == dt.hour
+        assert result.minute == dt.minute
+        assert result.second == dt.second
+        assert result.microsecond == dt.microsecond
+
+    def test_datetime_returns_utc_timezone(self):
+        """DateTime values are returned with UTC timezone."""
+        dt = datetime(2024, 6, 15, 12, 30, 45, tzinfo=UTC)
+        result = roundtrip_value("DateTime", dt)
+
+        # Result should be timezone-aware
+        assert result.tzinfo is not None
+        # Should be UTC (offset is 0)
+        assert result.utcoffset() == timedelta(0)
+
+    def test_datetime64_returns_utc_timezone(self):
+        """DateTime64 values are returned with UTC timezone."""
+        dt = datetime(2024, 6, 15, 12, 30, 45, 123000, tzinfo=UTC)
+        result = roundtrip_value("DateTime64(3)", dt)
+
+        # Result should be timezone-aware
+        assert result.tzinfo is not None
+        # Should be UTC (offset is 0)
+        assert result.utcoffset() == timedelta(0)
+
+    def test_datetime_with_explicit_timezone(self):
+        """DateTime with explicit timezone uses that timezone."""
+        dt = datetime(2024, 6, 15, 12, 30, 45, tzinfo=ZoneInfo("America/New_York"))
+        result = roundtrip_value("DateTime('America/New_York')", dt)
+
+        # Result should have the specified timezone
+        assert result.tzinfo is not None
+        assert result.tzinfo == ZoneInfo("America/New_York")
+        # Same hour since we're writing and reading in same timezone
+        assert result.hour == dt.hour
+
+    def test_datetime64_with_explicit_timezone(self):
+        """DateTime64 with explicit timezone uses that timezone."""
+        dt = datetime(2024, 6, 15, 12, 30, 45, 123000, tzinfo=ZoneInfo("Europe/London"))
+        result = roundtrip_value("DateTime64(3, 'Europe/London')", dt)
+
+        # Result should have the specified timezone
+        assert result.tzinfo is not None
+        assert result.tzinfo == ZoneInfo("Europe/London")
+        # Same hour since we're writing and reading in same timezone
+        assert result.hour == dt.hour
 
 
 class TestUUIDType:
